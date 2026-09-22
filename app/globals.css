@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-ivory: #F8F6F1;
+    --bg-white: #FFFFFF;
+    --text-ink: #171717;
+    --text-muted: #77736C;
+    --border-warm: #E8E2D8;
+    --accent-gold: #B58A55;
+  }
+
+  body {
+    @apply bg-[#F8F6F1] text-[#171717] font-sans antialiased;
+    min-height: 100vh;
+    color: #171717;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    font-feature-settings: "kern", "liga", "clig", "calt";
+  }
+
+  ::selection {
+    background: #E8E2D8;
+    color: #171717;
+  }
+}
+
+@layer utilities {
+  .editorial-rule {
+    height: 1px;
+    background: linear-gradient(90deg, #E8E2D8 0%, #D8D0C3 50%, #E8E2D8 100%);
+  }
+
+  /* Paper texture & spine effect for physical magazine look */
+  .magazine-spine-edge {
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.2) 0%,
+      rgba(0, 0, 0, 0.08) 2%,
+      rgba(255, 255, 255, 0.25) 3.5%,
+      rgba(0, 0, 0, 0.04) 5%,
+      transparent 8%
+    );
+  }
+
+  .paper-surface {
+    background-color: #FFFFFF;
+    background-image: radial-gradient(#F0EBE1 0.75px, transparent 0.75px);
+    background-size: 12px 12px;
+  }
+
+  /* Hide scrollbar for clean horizontal shelf */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
