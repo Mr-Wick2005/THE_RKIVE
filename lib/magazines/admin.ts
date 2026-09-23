@@ -1,5 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
 import { MagazineWithRelations, MagazineStatus } from '@/types/magazine';
 import { Profile } from '@/types/auth';
 import { isSupabaseConfigured, slugify, withTimeout } from '@/lib/utils';
@@ -30,7 +29,7 @@ export async function generateUniqueMagazineSlug(
   return withTimeout(
     (async () => {
       try {
-        const supabase = createClient();
+        const supabase = createAdminClient();
         let query = supabase.from('magazines').select('id, slug').like('slug', `${baseSlug}%`);
 
         if (currentMagazineId) {
@@ -78,7 +77,7 @@ export async function getMyDepartmentMagazines(
   return withTimeout(
     (async () => {
       try {
-        const supabase = createClient();
+        const supabase = createAdminClient();
         let query = supabase
           .from('magazines')
           .select('*, department:departments(*)')
@@ -120,7 +119,7 @@ export async function getMyDepartmentMagazineById(
   return withTimeout(
     (async () => {
       try {
-        const supabase = createClient();
+        const supabase = createAdminClient();
         let queryBuilder = supabase
           .from('magazines')
           .select('*, department:departments(*)')
@@ -149,13 +148,9 @@ export async function getMyDepartmentMagazineById(
 }
 
 /**
- * Calculates summary metrics for the department workspace
+ * Calculates summary metrics directly from a pre-fetched list of magazines
  */
-export async function getDepartmentPublicationStats(
-  profile: Profile
-): Promise<DepartmentStats> {
-  const magazines = await getMyDepartmentMagazines(profile);
-
+export function calculateStatsFromMagazines(magazines: MagazineWithRelations[]): DepartmentStats {
   const stats: DepartmentStats = {
     total: magazines.length,
     drafts: 0,
@@ -193,6 +188,16 @@ export async function getDepartmentPublicationStats(
 }
 
 /**
+ * Calculates summary metrics for the department workspace
+ */
+export async function getDepartmentPublicationStats(
+  profile: Profile
+): Promise<DepartmentStats> {
+  const magazines = await getMyDepartmentMagazines(profile);
+  return calculateStatsFromMagazines(magazines);
+}
+
+/**
  * Super Admin Review Queue queries with timeout protection
  */
 export async function getReviewQueueMagazines(
@@ -203,7 +208,7 @@ export async function getReviewQueueMagazines(
   return withTimeout(
     (async () => {
       try {
-        const supabase = createClient();
+        const supabase = createAdminClient();
         let query = supabase
           .from('magazines')
           .select('*, department:departments(*), author:profiles(*)')
@@ -241,7 +246,7 @@ export async function getMagazineForReview(
   return withTimeout(
     (async () => {
       try {
-        const supabase = createClient();
+        const supabase = createAdminClient();
         const { data: magazine, error: magError } = await supabase
           .from('magazines')
           .select('*, department:departments(*), author:profiles(*)')

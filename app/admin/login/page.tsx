@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useAdminAuth } from '@/components/admin/admin-auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
@@ -12,6 +13,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const errorQuery = searchParams.get('error');
+  const { profile, isLoading: isAuthLoading } = useAdminAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +25,18 @@ function LoginForm() {
       ? 'Access restricted: College Super Administrator privileges required.'
       : null
   );
+
+  // Automatically redirect if already authenticated via the authoritative AdminAuthProvider
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (profile?.is_active) {
+      if (profile.role === 'SUPER_ADMIN') {
+        router.replace('/admin/dashboard');
+      } else {
+        router.replace('/admin/magazines');
+      }
+    }
+  }, [profile, isAuthLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

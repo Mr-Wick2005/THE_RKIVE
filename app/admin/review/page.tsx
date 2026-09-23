@@ -1,29 +1,71 @@
-import React from 'react';
-import { redirect } from 'next/navigation';
-import { getCurrentProfile } from '@/lib/auth/session';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAdminAuth } from '@/components/admin/admin-auth-context';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { ReviewQueueTable } from '@/components/admin/review-queue-table';
-import { getReviewQueueMagazines } from '@/lib/magazines/admin';
-import { Shield, BookOpen } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
-export const metadata = {
-  title: 'College Editorial Review Queue | College Digital Magazine',
-  description: 'Super Administrator publication approval workspace and review queue.',
-};
+export default function AdminReviewPage() {
+  const router = useRouter();
+  const { profile, token, isLoading } = useAdminAuth();
+  const [data, setData] = useState<any>(null);
+  const [isFetching, setIsFetching] = useState(true);
 
-export default async function AdminReviewPage() {
-  const profile = await getCurrentProfile();
+  useEffect(() => {
+    if (isLoading) return;
+    if (!profile) {
+      router.replace('/admin/login');
+      return;
+    }
+    if (profile.role !== 'SUPER_ADMIN') {
+      router.replace('/admin/dashboard');
+      return;
+    }
 
-  if (!profile || !profile.is_active) {
-    redirect('/admin/login');
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/admin/data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: 'review' }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          router.replace('/admin/login');
+        }
+      } catch (err) {
+        console.error('Failed to load review data:', err);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    if (token) {
+      loadData();
+    }
+  }, [profile, token, isLoading, router]);
+
+  if (isLoading || isFetching || !profile || !data) {
+    return (
+      <div className="min-h-screen bg-[#F8F6F1] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 rounded-sm bg-[#171717] text-[#F8F6F1] flex items-center justify-center mx-auto font-serif text-base font-semibold animate-pulse">
+            M
+          </div>
+          <p className="text-xs font-mono text-[#77736C]">Loading Review Desk...</p>
+        </div>
+      </div>
+    );
   }
 
-  // Strictly enforce Super Admin access for college-wide review queue
-  if (profile.role !== 'SUPER_ADMIN') {
-    redirect('/admin/dashboard');
-  }
-
-  const magazines = await getReviewQueueMagazines('ALL');
+  const { magazines } = data;
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] flex flex-col">

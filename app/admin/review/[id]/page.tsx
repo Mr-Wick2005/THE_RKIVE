@@ -1,40 +1,70 @@
-import React from 'react';
-import { notFound, redirect } from 'next/navigation';
-import { getCurrentProfile } from '@/lib/auth/session';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAdminAuth } from '@/components/admin/admin-auth-context';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { ReviewWorkspace } from '@/components/admin/review-workspace';
-import { getMagazineForReview } from '@/lib/magazines/admin';
 
-interface ReviewDetailPageProps {
-  params: {
-    id: string;
-  };
-}
+export default function AdminReviewDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const { profile, token, isLoading } = useAdminAuth();
+  const [data, setData] = useState<any>(null);
+  const [isFetching, setIsFetching] = useState(true);
 
-export async function generateMetadata({ params }: ReviewDetailPageProps) {
-  const magazine = await getMagazineForReview(params.id);
-  return {
-    title: magazine ? `Review: ${magazine.title} | College Digital Magazine` : 'Publication Review',
-  };
-}
+  useEffect(() => {
+    if (isLoading) return;
+    if (!profile) {
+      router.replace('/admin/login');
+      return;
+    }
+    if (profile.role !== 'SUPER_ADMIN') {
+      router.replace('/admin/dashboard');
+      return;
+    }
 
-export default async function AdminReviewDetailPage({ params }: ReviewDetailPageProps) {
-  const profile = await getCurrentProfile();
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/admin/data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: 'review-detail', id: params.id }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          router.replace('/admin/review');
+        }
+      } catch (err) {
+        console.error('Failed to load review detail data:', err);
+      } finally {
+        setIsFetching(false);
+      }
+    };
 
-  if (!profile || !profile.is_active) {
-    redirect('/admin/login');
+    if (token) {
+      loadData();
+    }
+  }, [profile, token, isLoading, params.id, router]);
+
+  if (isLoading || isFetching || !profile || !data) {
+    return (
+      <div className="min-h-screen bg-[#F8F6F1] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 rounded-sm bg-[#171717] text-[#F8F6F1] flex items-center justify-center mx-auto font-serif text-base font-semibold animate-pulse">
+            M
+          </div>
+          <p className="text-xs font-mono text-[#77736C]">Loading Review Workspace...</p>
+        </div>
+      </div>
+    );
   }
 
-  // Super Admin check
-  if (profile.role !== 'SUPER_ADMIN') {
-    redirect('/admin/dashboard');
-  }
-
-  const magazine = await getMagazineForReview(params.id);
-
-  if (!magazine) {
-    notFound();
-  }
+  const { magazine } = data;
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] flex flex-col">

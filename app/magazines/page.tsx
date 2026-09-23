@@ -9,6 +9,8 @@ import { ArchiveFilters } from '@/components/magazines/archive-filters';
 import { MagazineCardSkeleton } from '@/components/ui/loading-skeleton';
 import { Sparkles, BookOpen } from 'lucide-react';
 
+export const revalidate = 60;
+
 export const metadata = {
   title: 'Digital Magazine Archive | Athenaeum',
   description:
@@ -25,15 +27,16 @@ interface MagazinesPageProps {
 }
 
 export default async function MagazinesArchivePage({ searchParams }: MagazinesPageProps) {
-  const departments = await getActiveDepartments();
-  const academicYears = await getAcademicYears();
-
-  const filteredMagazines = await getPublishedMagazines({
-    query: searchParams.q,
-    departmentSlug: searchParams.department,
-    academicYear: searchParams.year,
-    sort: searchParams.sort || 'latest',
-  });
+  const [departments, academicYears, filteredMagazines] = await Promise.all([
+    getActiveDepartments(),
+    getAcademicYears(),
+    getPublishedMagazines({
+      query: searchParams.q,
+      departmentSlug: searchParams.department,
+      academicYear: searchParams.year,
+      sort: searchParams.sort || 'latest',
+    }),
+  ]);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F6F1]">

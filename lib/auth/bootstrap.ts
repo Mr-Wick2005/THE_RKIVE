@@ -74,8 +74,8 @@ export async function getEditorialUsers(): Promise<ProfileWithDepartment[]> {
 /**
  * Super Admin only: Summary statistics of editorial users
  */
-export async function getEditorialUserStats() {
-  const users = await getEditorialUsers();
+export async function getEditorialUserStats(providedUsers?: ProfileWithDepartment[]) {
+  const users = providedUsers ?? (await getEditorialUsers());
 
   return {
     total: users.length,

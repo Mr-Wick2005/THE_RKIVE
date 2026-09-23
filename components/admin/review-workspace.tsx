@@ -62,7 +62,12 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
   // Mark as Under Review on mount if currently SUBMITTED
   React.useEffect(() => {
     if (magazine.status === 'SUBMITTED') {
-      startReviewMagazineAction(magazine.id).catch(console.error);
+      (async () => {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        startReviewMagazineAction(magazine.id, session?.access_token).catch(console.error);
+      })();
     }
   }, [magazine.id, magazine.status]);
 
@@ -70,7 +75,10 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
     try {
       setIsSubmitting(true);
       setActionError(null);
-      const res = await approveMagazineAction(magazine.id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await approveMagazineAction(magazine.id, undefined, session?.access_token);
       if (!res.success) {
         setActionError(res.error || 'Failed to approve publication.');
       } else {
@@ -88,7 +96,10 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
     try {
       setIsSubmitting(true);
       setActionError(null);
-      const res = await rejectMagazineAction(magazine.id, reason);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await rejectMagazineAction(magazine.id, reason, session?.access_token);
       if (!res.success) {
         setActionError(res.error || 'Failed to reject publication.');
       } else {
@@ -107,7 +118,10 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
     try {
       setIsSubmitting(true);
       setActionError(null);
-      const res = await publishMagazineAction(magazine.id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await publishMagazineAction(magazine.id, session?.access_token);
       if (!res.success) {
         setActionError(res.error || 'Failed to publish magazine.');
       } else {
@@ -128,7 +142,10 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
     try {
       setIsSubmitting(true);
       setActionError(null);
-      const res = await archiveMagazineAction(magazine.id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await archiveMagazineAction(magazine.id, session?.access_token);
       if (!res.success) {
         setActionError(res.error || 'Failed to archive magazine.');
       } else {

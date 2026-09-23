@@ -17,6 +17,8 @@ interface DepartmentPageProps {
   };
 }
 
+export const revalidate = 60;
+
 export async function generateMetadata({ params }: DepartmentPageProps) {
   const department = await getDepartmentBySlug(params.slug);
   if (!department) {

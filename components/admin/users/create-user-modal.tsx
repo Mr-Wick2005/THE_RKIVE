@@ -41,7 +41,14 @@ export function CreateUserModal({
     }
 
     try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
       const formData = new FormData();
+      if (session?.access_token) {
+        formData.set('access_token', session.access_token);
+      }
       formData.set('full_name', fullName);
       formData.set('email', email);
       formData.set('password', password);

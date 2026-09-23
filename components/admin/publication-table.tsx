@@ -8,11 +8,12 @@ import { MagazineWithRelations, MagazineStatus } from '@/types/magazine';
 import { PublicationStatusBadge } from './publication-status-badge';
 import { ProcessingStatusBadge } from './processing-status-badge';
 import { ConfirmSubmitDialog } from './confirm-submit-dialog';
+import { ConfirmDeleteDialog } from './confirm-delete-dialog';
 import { AdminEmptyState } from './admin-empty-state';
 import { formatDate } from '@/lib/utils';
 import {
   submitMagazineForReviewAction,
-  deleteDraftMagazineAction,
+  deleteMagazineAction,
   retryMagazineProcessingAction,
 } from '@/app/actions/magazines';
 import {
@@ -43,8 +44,8 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
   const [submittingMag, setSubmittingMag] = useState<MagazineWithRelations | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Delete confirm state
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Delete modal state
+  const [deletingMag, setDeletingMag] = useState<MagazineWithRelations | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Retrying state
@@ -81,7 +82,10 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
     setRetryingId(id);
     setFeedback(null);
     try {
-      const result = await retryMagazineProcessingAction(id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await retryMagazineProcessingAction(id, session?.access_token);
       if (result.success) {
         setFeedback({
           type: 'success',
@@ -107,7 +111,10 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
     setFeedback(null);
 
     try {
-      const result = await submitMagazineForReviewAction(submittingMag.id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await submitMagazineForReviewAction(submittingMag.id, session?.access_token);
       if (result.success) {
         setFeedback({
           type: 'success',
@@ -128,32 +135,37 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
     }
   };
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete draft "${title}"?`)) {
-      return;
-    }
+  const handleStartDelete = (mag: MagazineWithRelations) => {
+    setDeletingMag(mag);
+  };
 
-    setDeletingId(id);
+  const handleConfirmDelete = async () => {
+    if (!deletingMag) return;
+    setIsDeleting(true);
     setFeedback(null);
 
     try {
-      const result = await deleteDraftMagazineAction(id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await deleteMagazineAction(deletingMag.id, session?.access_token);
       if (result.success) {
         setFeedback({
           type: 'success',
-          message: `Draft "${title}" was deleted.`,
+          message: `"${deletingMag.title}" was permanently deleted.`,
         });
+        setDeletingMag(null);
         router.refresh();
       } else {
         setFeedback({
           type: 'error',
-          message: result.error || 'Failed to delete draft.',
+          message: result.error || 'Failed to delete publication.',
         });
       }
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Delete failed.' });
     } finally {
-      setDeletingId(null);
+      setIsDeleting(false);
     }
   };
 
@@ -367,18 +379,16 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                             </Link>
                           )}
 
-                          {/* Delete Draft Action */}
-                          {isDraft && (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(mag.id, mag.title)}
-                              disabled={deletingId === mag.id}
-                              className="p-1.5 text-[#77736C] hover:text-rose-700 hover:bg-rose-50 rounded-sm transition-colors"
-                              title="Delete Draft"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          {/* Delete Publication Action (All stages) */}
+                          <button
+                            type="button"
+                            onClick={() => handleStartDelete(mag)}
+                            className="p-1.5 text-[#77736C] hover:text-rose-700 hover:bg-rose-50 rounded-sm transition-colors cursor-pointer"
+                            title="Delete Publication"
+                            aria-label={`Delete ${mag.title}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -398,6 +408,18 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
           onConfirm={handleConfirmSubmit}
           onCancel={() => setSubmittingMag(null)}
           isSubmitting={isSubmitting}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingMag && (
+        <ConfirmDeleteDialog
+          isOpen={Boolean(deletingMag)}
+          publicationTitle={deletingMag.title}
+          publicationStatus={deletingMag.status}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeletingMag(null)}
+          isDeleting={isDeleting}
         />
       )}
     </div>

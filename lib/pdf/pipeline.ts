@@ -135,10 +135,10 @@ export async function processMagazinePdf(
     // 6. Render pages to WebP & thumbnails
     console.log(`[PDF Pipeline] Rendering ${validation.pageCount} pages to optimized WebP...`);
     const { totalPages, pages } = await renderPdfPages(pdfBuffer, {
-      scale: 2.0, // Crisp ~150-200 DPI
-      pageQuality: 85,
-      thumbnailWidth: 320,
-      thumbnailQuality: 80,
+      scale: 3.0, // Print-quality ~216 DPI for crisp text on high-DPI displays
+      pageQuality: 92,
+      thumbnailWidth: 360,
+      thumbnailQuality: 85,
       onProgress: (cur, total) => {
         if (cur % 10 === 0 || cur === total) {
           console.log(`[PDF Pipeline] Rendered page ${cur} of ${total}`);

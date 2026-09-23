@@ -64,7 +64,10 @@ export function UsersTable({
 
     setIsUpdating(userId);
     try {
-      await toggleUserStatusAction(userId, !currentStatus);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      await toggleUserStatusAction(userId, !currentStatus, session?.access_token);
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -77,7 +80,10 @@ export function UsersTable({
     if (!selectedDeptId) return;
     setIsUpdating(userId);
     try {
-      await updateUserDepartmentAction(userId, selectedDeptId);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      await updateUserDepartmentAction(userId, selectedDeptId, session?.access_token);
       setEditingDeptUserId(null);
       router.refresh();
     } catch (err) {

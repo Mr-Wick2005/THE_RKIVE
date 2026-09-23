@@ -139,15 +139,19 @@ export function AdminHeader({ profile, department }: AdminHeaderProps) {
             </span>
           </div>
 
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#E8E2D8] text-xs font-medium text-[#44423E] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition-colors shadow-sm"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={async () => {
+              const { createClient } = await import('@/lib/supabase/client');
+              const supabase = createClient();
+              await supabase.auth.signOut();
+              window.location.href = '/admin/login';
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#E8E2D8] text-xs font-medium text-[#44423E] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition-colors shadow-sm cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </header>

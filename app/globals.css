@@ -62,4 +62,52 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Physical Flipbook Engine Styles */
+  .stf__parent {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    transform: translateZ(0);
+    touch-action: none;
+    user-select: none;
+  }
+
+  .stf__wrapper {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .stf__block {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    perspective: 2400px;
+  }
+
+  .stf__item {
+    display: none;
+    position: absolute;
+    transform-style: preserve-3d;
+    cursor: grab;
+  }
+
+  .stf__item:active {
+    cursor: grabbing;
+  }
+
+  .flip-page-item {
+    background-color: #FFFFFF;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08);
+  }
+
+  .flip-page-cover-front {
+    box-shadow: 4px 6px 24px -2px rgba(0, 0, 0, 0.18), 0 2px 8px -1px rgba(0, 0, 0, 0.12);
+  }
+
+  .flip-page-cover-back {
+    box-shadow: -4px 6px 24px -2px rgba(0, 0, 0, 0.18), 0 2px 8px -1px rgba(0, 0, 0, 0.12);
+  }
 }

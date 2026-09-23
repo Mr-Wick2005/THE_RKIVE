@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { generateUniqueMagazineSlug, recordStatusTransition } from '@/lib/magazines/admin';
-import { uploadMagazineCover, uploadMagazinePdf } from '@/lib/storage/upload';
+import { uploadMagazineCover, uploadMagazinePdf, deleteMagazineStorageAssets } from '@/lib/storage/upload';
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { isSupabaseConfigured } from '@/lib/utils';
 import { MagazineProcessingStatus, MagazineStatus } from '@/types/magazine';
@@ -21,7 +21,8 @@ export interface ActionResult {
  */
 export async function createMagazineAction(formData: FormData): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const token = formData.get('access_token') as string | null;
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active administrative profile required.' };
     }
@@ -142,12 +143,11 @@ export async function createMagazineAction(formData: FormData): Promise<ActionRe
       if (fileUpdateError) return { success: false, error: `Failed to save uploaded files: ${fileUpdateError.message}` };
     }
 
-    // 5. Trigger PDF Processing Pipeline in background if PDF was uploaded
+    // 5. Process the uploaded PDF before this Server Action completes. A
+    // fire-and-forget promise is not durable in Next.js and can leave the
+    // magazine stuck in PROCESSING when the action request is torn down.
     if (hasPdfUploaded) {
-      // Execute processing (non-blocking for the client response, but initiated server-side)
-      processMagazinePdf(magazineId, { requestingUserId: profile.id }).catch((err) => {
-        console.error(`[Background Processing] Failed for magazine ${magazineId}:`, err);
-      });
+      await processMagazinePdf(magazineId, { requestingUserId: profile.id });
     }
 
     revalidatePath('/admin/dashboard');
@@ -168,7 +168,8 @@ export async function updateMagazineAction(
   formData: FormData
 ): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const token = formData.get('access_token') as string | null;
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active administrative profile required.' };
     }
@@ -268,11 +269,10 @@ export async function updateMagazineAction(
       return { success: false, error: updateError.message || 'Failed to update publication.' };
     }
 
-    // Trigger PDF processing if a new PDF was uploaded
+    // Run PDF processing within this request so local development does not
+    // depend on a background worker that is not running.
     if (newPdfUploaded) {
-      processMagazinePdf(id, { requestingUserId: profile.id }).catch((err) => {
-        console.error(`[Background Processing] Failed for magazine ${id}:`, err);
-      });
+      await processMagazinePdf(id, { requestingUserId: profile.id });
     }
 
     revalidatePath('/admin/dashboard');
@@ -289,9 +289,9 @@ export async function updateMagazineAction(
 /**
  * Server action to manually trigger or retry PDF ingestion & page processing
  */
-export async function retryMagazineProcessingAction(id: string): Promise<ActionResult> {
+export async function retryMagazineProcessingAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active administrative profile required.' };
     }
@@ -347,9 +347,9 @@ export async function retryMagazineProcessingAction(id: string): Promise<ActionR
  * Enforces submission safety: PDF must exist, processing_status must be 'COMPLETED',
  * and rendered pages must be present.
  */
-export async function submitMagazineForReviewAction(id: string): Promise<ActionResult> {
+export async function submitMagazineForReviewAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active administrative profile required.' };
     }
@@ -433,11 +433,14 @@ export async function submitMagazineForReviewAction(id: string): Promise<ActionR
 }
 
 /**
- * Server action to delete a DRAFT magazine
+ * Server action to delete a magazine publication at any stage.
+ * Department Admins can delete magazines belonging to their own department.
+ * Super Admins can delete any magazine.
+ * Safely removes storage assets (covers, PDFs, rendered pages, thumbnails) and deletes DB record.
  */
-export async function deleteDraftMagazineAction(id: string): Promise<ActionResult> {
+export async function deleteMagazineAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active administrative profile required.' };
     }
@@ -447,7 +450,7 @@ export async function deleteDraftMagazineAction(id: string): Promise<ActionResul
 
     const { data: existing, error: fetchError } = await (supabase
       .from('magazines') as any)
-      .select('id, department_id, status')
+      .select('id, department_id, status, title, slug')
       .eq('id', id)
       .single();
 
@@ -455,41 +458,54 @@ export async function deleteDraftMagazineAction(id: string): Promise<ActionResul
       return { success: false, error: 'Publication record not found.' };
     }
 
+    // Permission check: Department Admins are strictly confined to their own department's magazines
     if (profile.role !== 'SUPER_ADMIN' && existing.department_id !== profile.department_id) {
-      return { success: false, error: 'Forbidden: You can only delete your own department drafts.' };
+      return { success: false, error: 'Forbidden: You can only delete your own department publications.' };
     }
 
-    if (existing.status !== 'DRAFT') {
-      return {
-        success: false,
-        error: `Only draft publications can be deleted. Current status is '${existing.status}'.`,
-      };
-    }
+    // 1. Purge all storage assets (cover image, original PDF, pages, and thumbnails)
+    await deleteMagazineStorageAssets(supabase, existing.department_id, existing.id);
 
+    // 2. Delete the magazine record from database (cascades to pages and audit history)
     const { error: deleteError } = await supabase
       .from('magazines')
       .delete()
       .eq('id', id);
 
     if (deleteError) {
-      return { success: false, error: deleteError.message || 'Failed to delete publication draft.' };
+      return { success: false, error: deleteError.message || 'Failed to delete publication record.' };
     }
 
+    // 3. Revalidate public and administrative routes
+    revalidatePath('/');
+    revalidatePath('/magazines');
+    revalidatePath(`/magazine/${existing.slug}`);
+    revalidatePath(`/reader/${existing.slug}`);
     revalidatePath('/admin/dashboard');
     revalidatePath('/admin/magazines');
+    revalidatePath('/admin/review');
+    revalidatePath(`/admin/review/${id}`);
 
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to delete draft.' };
+    console.error('Error in deleteMagazineAction:', err);
+    return { success: false, error: err.message || 'Failed to delete publication.' };
   }
+}
+
+/**
+ * Backward compatibility alias for deleting drafts
+ */
+export async function deleteDraftMagazineAction(id: string, token?: string): Promise<ActionResult> {
+  return deleteMagazineAction(id, token);
 }
 
 /**
  * Super Admin: Mark publication as UNDER_REVIEW
  */
-export async function startReviewMagazineAction(id: string): Promise<ActionResult> {
+export async function startReviewMagazineAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || profile.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Only Super Administrators can review submissions.' };
     }
@@ -524,9 +540,9 @@ export async function startReviewMagazineAction(id: string): Promise<ActionResul
 /**
  * Super Admin: Approve publication (SUBMITTED / UNDER_REVIEW -> APPROVED)
  */
-export async function approveMagazineAction(id: string, note?: string): Promise<ActionResult> {
+export async function approveMagazineAction(id: string, note?: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || profile.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Only Super Administrators can approve publications.' };
     }
@@ -579,9 +595,9 @@ export async function approveMagazineAction(id: string, note?: string): Promise<
 /**
  * Super Admin: Reject publication with mandatory reason
  */
-export async function rejectMagazineAction(id: string, reason: string): Promise<ActionResult> {
+export async function rejectMagazineAction(id: string, reason: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || profile.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Only Super Administrators can reject publications.' };
     }
@@ -640,9 +656,9 @@ export async function rejectMagazineAction(id: string, reason: string): Promise<
  * Super Admin: Publish approved magazine (APPROVED -> PUBLISHED)
  * Sets published_at to current timestamp. Immediately makes visible across all public discovery routes.
  */
-export async function publishMagazineAction(id: string): Promise<ActionResult> {
+export async function publishMagazineAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || profile.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Only Super Administrators can publish magazines.' };
     }
@@ -702,9 +718,9 @@ export async function publishMagazineAction(id: string): Promise<ActionResult> {
  * Super Admin: Archive a published magazine (PUBLISHED -> ARCHIVED)
  * Removes from standard public archive without deleting historical data.
  */
-export async function archiveMagazineAction(id: string): Promise<ActionResult> {
+export async function archiveMagazineAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || profile.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Only Super Administrators can archive magazines.' };
     }
@@ -756,9 +772,9 @@ export async function archiveMagazineAction(id: string): Promise<ActionResult> {
 /**
  * Department Admin: Resubmit a rejected publication after making necessary revisions
  */
-export async function resubmitMagazineAction(id: string): Promise<ActionResult> {
+export async function resubmitMagazineAction(id: string, token?: string): Promise<ActionResult> {
   try {
-    const profile = await getCurrentProfile();
+    const profile = await getCurrentProfile(token);
     if (!profile || !profile.is_active) {
       return { success: false, error: 'Unauthorized: Active profile required.' };
     }

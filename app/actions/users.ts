@@ -26,7 +26,8 @@ export async function createDepartmentAdminAction(
   formData: FormData
 ): Promise<ActionResult> {
   try {
-    const caller = await getCurrentProfile();
+    const token = formData.get('access_token') as string | null;
+    const caller = await getCurrentProfile(token);
     if (!caller || caller.role !== 'SUPER_ADMIN') {
       return {
         success: false,
@@ -117,10 +118,11 @@ export async function createDepartmentAdminAction(
  */
 export async function toggleUserStatusAction(
   userId: string,
-  isActive: boolean
+  isActive: boolean,
+  token?: string
 ): Promise<ActionResult> {
   try {
-    const caller = await getCurrentProfile();
+    const caller = await getCurrentProfile(token);
     if (!caller || caller.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Super Admin privileges required.' };
     }
@@ -153,10 +155,11 @@ export async function toggleUserStatusAction(
  */
 export async function updateUserDepartmentAction(
   userId: string,
-  departmentId: string
+  departmentId: string,
+  token?: string
 ): Promise<ActionResult> {
   try {
-    const caller = await getCurrentProfile();
+    const caller = await getCurrentProfile(token);
     if (!caller || caller.role !== 'SUPER_ADMIN') {
       return { success: false, error: 'Unauthorized: Super Admin privileges required.' };
     }

@@ -2,13 +2,15 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { getDepartmentsWithStats } from '@/lib/departments';
-import { getPublishedMagazines, getFeaturedMagazines } from '@/lib/magazines';
+import { getPublishedMagazines } from '@/lib/magazines';
 import { HeroComposition } from '@/components/magazines/hero-composition';
 import { MagazineGrid } from '@/components/magazines/magazine-grid';
 import { MagazineShelf } from '@/components/magazines/magazine-shelf';
 import { DepartmentDirectory } from '@/components/departments/department-directory';
 import { SectionHeading } from '@/components/ui/section-heading';
 import { BookOpen, Layers, Sparkles, ShieldCheck, Library, BookmarkCheck, ArrowRight } from 'lucide-react';
+
+export const revalidate = 60;
 
 export const metadata = {
   title: 'Athenaeum — College Digital Magazine Archive & Publications',
@@ -17,9 +19,11 @@ export const metadata = {
 };
 
 export default async function HomePage() {
-  const departmentsWithStats = await getDepartmentsWithStats();
-  const allPublished = await getPublishedMagazines();
-  const featuredMagazines = await getFeaturedMagazines(4);
+  const [departmentsWithStats, allPublished] = await Promise.all([
+    getDepartmentsWithStats(),
+    getPublishedMagazines(),
+  ]);
+  const featuredMagazines = allPublished.slice(0, 4);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F6F1]">

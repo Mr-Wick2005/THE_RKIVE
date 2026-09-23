@@ -1,42 +1,69 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { requireAuth } from '@/lib/auth/permissions';
-import { getDepartmentById } from '@/lib/departments';
-import { getMyDepartmentMagazineById } from '@/lib/magazines/admin';
+import { useRouter } from 'next/navigation';
+import { useAdminAuth } from '@/components/admin/admin-auth-context';
 import { AdminHeader } from '@/components/layout/admin-header';
 import { PublicationForm } from '@/components/admin/publication-form';
 import { PublicationStatusBadge } from '@/components/admin/publication-status-badge';
-import { ArrowLeft } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export default function EditPublicationPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const { profile, token, isLoading } = useAdminAuth();
+  const [data, setData] = useState<any>(null);
+  const [isFetching, setIsFetching] = useState(true);
 
-interface EditPublicationPageProps {
-  params: {
-    id: string;
-  };
-}
+  useEffect(() => {
+    if (isLoading) return;
+    if (!profile) {
+      router.replace('/admin/login');
+      return;
+    }
 
-export async function generateMetadata({ params }: EditPublicationPageProps) {
-  return {
-    title: 'Edit Publication | Editorial Desk',
-  };
-}
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/admin/data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: 'edit-publication', id: params.id }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        } else {
+          router.replace('/admin/magazines');
+        }
+      } catch (err) {
+        console.error('Failed to load publication data:', err);
+      } finally {
+        setIsFetching(false);
+      }
+    };
 
-export default async function EditPublicationPage({ params }: EditPublicationPageProps) {
-  const { profile } = await requireAuth();
+    if (token) {
+      loadData();
+    }
+  }, [profile, token, isLoading, params.id, router]);
 
-  const magazine = await getMyDepartmentMagazineById(params.id, profile);
-
-  if (!magazine) {
-    notFound();
-  }
-
-  let department = null;
-  if (magazine.department_id) {
-    department = await getDepartmentById(magazine.department_id);
+  if (isLoading || isFetching || !profile || !data) {
+    return (
+      <div className="min-h-screen bg-[#F8F6F1] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 rounded-sm bg-[#171717] text-[#F8F6F1] flex items-center justify-center mx-auto font-serif text-base font-semibold animate-pulse">
+            M
+          </div>
+          <p className="text-xs font-mono text-[#77736C]">Loading Publication Editor...</p>
+        </div>
+      </div>
+    );
   }
 
   const isSuper = profile.role === 'SUPER_ADMIN';
+  const { magazine, department } = data;
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] flex flex-col">

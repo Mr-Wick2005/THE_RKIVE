@@ -110,7 +110,10 @@ export function PublicationForm({
     setSuccessMessage(null);
 
     try {
-      const result = await retryMagazineProcessingAction(initialData.id);
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await retryMagazineProcessingAction(initialData.id, session?.access_token);
       if (result.success) {
         setSuccessMessage('PDF processing started. Document pages are being generated.');
         router.refresh();
@@ -157,7 +160,14 @@ export function PublicationForm({
     }
 
     try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
       const formData = new FormData();
+      if (session?.access_token) {
+        formData.set('access_token', session.access_token);
+      }
       formData.set('title', title);
       formData.set('subtitle', subtitle);
       formData.set('description', description);

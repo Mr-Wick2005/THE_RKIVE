@@ -156,3 +156,66 @@ export async function uploadMagazinePdf(
 
   return { path: filePath };
 }
+
+/**
+ * Safely removes all storage assets (cover, PDF, rendered pages, thumbnails)
+ * associated with a magazine from Supabase storage buckets.
+ */
+export async function deleteMagazineStorageAssets(
+  supabase: SupabaseClient<any, any, any> | any,
+  departmentId: string,
+  magazineId: string
+): Promise<void> {
+  const folderPrefix = `${departmentId}/${magazineId}`;
+
+  // 1. Clean up magazine-covers
+  try {
+    const { data: coverFiles } = await supabase.storage
+      .from('magazine-covers')
+      .list(folderPrefix);
+    if (coverFiles && coverFiles.length > 0) {
+      await supabase.storage
+        .from('magazine-covers')
+        .remove(coverFiles.map((f: { name: string }) => `${folderPrefix}/${f.name}`));
+    }
+  } catch (err) {
+    console.warn('[Storage Cleanup] Non-critical cover cleanup warning:', err);
+  }
+
+  // 2. Clean up magazine-pdfs
+  try {
+    const { data: pdfFiles } = await supabase.storage
+      .from('magazine-pdfs')
+      .list(folderPrefix);
+    if (pdfFiles && pdfFiles.length > 0) {
+      await supabase.storage
+        .from('magazine-pdfs')
+        .remove(pdfFiles.map((f: { name: string }) => `${folderPrefix}/${f.name}`));
+    }
+  } catch (err) {
+    console.warn('[Storage Cleanup] Non-critical PDF cleanup warning:', err);
+  }
+
+  // 3. Clean up magazine-pages (pages and thumbnails)
+  try {
+    const { data: pageFiles } = await supabase.storage
+      .from('magazine-pages')
+      .list(`${folderPrefix}/pages`);
+    if (pageFiles && pageFiles.length > 0) {
+      await supabase.storage
+        .from('magazine-pages')
+        .remove(pageFiles.map((f: { name: string }) => `${folderPrefix}/pages/${f.name}`));
+    }
+
+    const { data: thumbFiles } = await supabase.storage
+      .from('magazine-pages')
+      .list(`${folderPrefix}/thumbnails`);
+    if (thumbFiles && thumbFiles.length > 0) {
+      await supabase.storage
+        .from('magazine-pages')
+        .remove(thumbFiles.map((f: { name: string }) => `${folderPrefix}/thumbnails/${f.name}`));
+    }
+  } catch (err) {
+    console.warn('[Storage Cleanup] Non-critical pages cleanup warning:', err);
+  }
+}

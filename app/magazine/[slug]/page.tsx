@@ -21,6 +21,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+export const revalidate = 60;
+
 interface MagazinePageProps {
   params: {
     slug: string;

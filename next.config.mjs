@@ -10,6 +10,7 @@ const nextConfig = {
     ],
   },
   experimental: {
+    optimizePackageImports: ['lucide-react'],
     serverComponentsExternalPackages: ['@napi-rs/canvas', 'sharp', 'pdfjs-dist', 'pdf-lib'],
   },
   webpack: (config) => {
