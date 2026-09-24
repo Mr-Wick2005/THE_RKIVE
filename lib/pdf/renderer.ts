@@ -166,7 +166,6 @@ export async function renderPdfPages(
         quality: pageQuality,
         effort: 5,
         smartSubsample: true,
-        reductionEffort: 5,
       })
       .toBuffer();
 
