@@ -14,40 +14,40 @@ export function DepartmentCard({ department }: DepartmentCardProps) {
   return (
     <Link
       href={`/department/${slug}`}
-      className="group flex flex-col justify-between p-6 sm:p-7 rounded-sm border border-[#E8E2D8] bg-white hover:border-[#171717] hover:shadow-editorial-lg transition-all duration-300 relative overflow-hidden"
+      className="group flex flex-col justify-between p-6 sm:p-8 cutout-card cutout-card-tape hover-lift-orange relative overflow-visible"
     >
       {/* Top Code Badge & Arrow */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-sm bg-[#F0EBE1] text-[#171717] border border-[#E8E2D8] group-hover:bg-[#171717] group-hover:text-[#F8F6F1] group-hover:border-[#171717] transition-colors">
+          <span className="text-sm font-mono font-bold px-3.5 py-1.5 bg-[#EAE3D7] text-[#1A1A1A] border-2 border-[#1A1A1A] group-hover:bg-[#1A1A1A] group-hover:text-[#FAF7F2] transition-colors">
             {short_name}
           </span>
-          <div className="w-7 h-7 rounded-full bg-[#F8F6F1] flex items-center justify-center text-[#77736C] group-hover:bg-[#171717] group-hover:text-[#F8F6F1] group-hover:translate-x-0.5 transition-all">
+          <div className="w-9 h-9 bg-[#EAE3D7] text-[#1A1A1A] border border-[#1A1A1A]/30 flex items-center justify-center group-hover:bg-[#C24A26] group-hover:text-[#FAF7F2] group-hover:border-[#C24A26] transition-all">
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
 
-        <h3 className="font-serif text-xl sm:text-2xl font-medium text-[#171717] group-hover:text-[#B58A55] transition-colors leading-snug">
+        <h3 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1A1A] group-hover:text-[#C24A26] transition-colors leading-snug">
           {name}
         </h3>
 
-        <p className="text-xs text-[#77736C] mt-2.5 line-clamp-3 leading-relaxed font-light">
+        <p className="text-base sm:text-lg text-[#3E3C38] mt-3.5 line-clamp-3 leading-relaxed font-normal">
           {description ||
             'Departmental capstone periodicals, peer-reviewed engineering proceedings, and annual research digests.'}
         </p>
       </div>
 
       {/* Bottom Publication Stats */}
-      <div className="pt-6 mt-6 border-t border-[#F0EBE1] flex items-center justify-between text-xs text-[#77736C]">
-        <div className="flex items-center gap-1.5">
-          <BookOpen className="w-3.5 h-3.5 text-[#B58A55]" />
-          <span className="font-medium text-[#171717]">
+      <div className="pt-5 mt-6 border-t border-[#1A1A1A]/15 flex items-center justify-between text-sm sm:text-base text-[#1A1A1A]">
+        <div className="flex items-center gap-2 font-medium">
+          <BookOpen className="w-4 h-4 text-[#C24A26]" />
+          <span className="font-bold text-[#1A1A1A]">
             {magazine_count} {magazine_count === 1 ? 'Publication' : 'Publications'}
           </span>
         </div>
 
         {latest_magazine_year && (
-          <span className="font-mono text-[11px]">
+          <span className="font-mono text-xs sm:text-sm font-bold text-[#1A1A1A] bg-[#EAE3D7] px-3 py-1.5 border border-[#1A1A1A]/20">
             Latest: {latest_magazine_year}
           </span>
         )}

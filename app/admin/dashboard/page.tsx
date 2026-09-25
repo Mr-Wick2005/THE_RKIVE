@@ -53,19 +53,19 @@ export default function AdminDashboardPage() {
 
   if (isLoading || isFetching || !profile || !data) {
     return (
-      <div className="min-h-screen bg-[#F8F6F1] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F8F6F0] flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 rounded-sm bg-[#171717] text-[#F8F6F1] flex items-center justify-center mx-auto font-serif text-base font-semibold animate-pulse">
+          <div className="w-8 h-8 rounded-sm bg-[#121210] text-[#FAF7F2] flex items-center justify-center mx-auto font-serif text-base font-semibold animate-pulse">
             M
           </div>
-          <p className="text-xs font-mono text-[#77736C]">Loading Executive Desk...</p>
+          <p className="text-xs font-mono text-[#55524D]">Loading Executive Desk...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F6F1] flex flex-col">
+    <div className="min-h-screen bg-[#F8F6F0] flex flex-col">
       <AdminHeader profile={profile} />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 sm:px-10 py-10">

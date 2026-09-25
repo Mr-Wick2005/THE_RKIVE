@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface SectionHeadingProps {
+export interface SectionHeadingProps {
   eyebrow?: string;
   title: string;
   subtitle?: string;
@@ -26,22 +26,22 @@ export function SectionHeading({
   return (
     <div
       className={cn(
-        'mb-10 pb-4 border-b border-[#E8E2D8] flex flex-col md:flex-row md:items-end justify-between gap-4',
+        'mb-10 pb-5 border-b-2 border-[#1A1A1A] flex flex-col md:flex-row md:items-end justify-between gap-4',
         isCenter && 'text-center md:items-center',
         className
       )}
     >
       <div className={cn(isCenter && 'mx-auto')}>
         {eyebrow && (
-          <span className="text-[11px] uppercase tracking-widest font-semibold text-[#B58A55] block mb-1">
+          <span className="font-mono text-sm sm:text-base font-bold text-[#C24A26] uppercase tracking-widest block mb-2.5">
             {eyebrow}
           </span>
         )}
-        <h2 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight text-[#171717]">
+        <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl text-[#1A1A1A] font-semibold tracking-tight leading-tight">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-xs sm:text-sm text-[#77736C] max-w-2xl mt-1.5 font-light leading-relaxed">
+          <p className="font-sans text-lg sm:text-xl text-[#3E3C38] max-w-3xl mt-3 font-normal leading-relaxed">
             {subtitle}
           </p>
         )}
@@ -50,7 +50,7 @@ export function SectionHeading({
       {linkHref && linkLabel && (
         <Link
           href={linkHref}
-          className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-[#171717] hover:text-[#B58A55] transition-colors self-start md:self-end flex-shrink-0 group"
+          className="inline-flex items-center gap-2 font-mono text-sm sm:text-base font-bold text-[#1A1A1A] hover:text-[#FAF7F2] hover:bg-[#1A1A1A] transition-all self-start md:self-end flex-shrink-0 group uppercase tracking-wider bg-[#F4EFEB] border-2 border-[#1A1A1A] px-5 py-3 rounded-none shadow-[2px_2px_0px_#1A1A1A] hover:shadow-[4px_4px_0px_#1B44B8]"
         >
           <span>{linkLabel}</span>
           <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

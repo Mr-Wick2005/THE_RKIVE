@@ -137,6 +137,17 @@ export async function POST(request: Request) {
         });
       }
 
+      case 'departments': {
+        if (profile.role !== 'SUPER_ADMIN') {
+          return NextResponse.json({ error: 'Forbidden: Super Admin required' }, { status: 403 });
+        }
+        const departments = await getDepartmentsWithStats();
+        return NextResponse.json({
+          profile,
+          departments,
+        });
+      }
+
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }

@@ -1,6 +1,6 @@
 {
-  "name": "college-digital-magazine",
-  "version": "0.1.0",
+  "name": "the-rkive",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

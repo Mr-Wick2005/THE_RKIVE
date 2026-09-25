@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MagazineCover } from './magazine-cover';
 import { MagazineWithRelations } from '@/types/magazine';
-import { ArrowUpRight, BookOpen, FileText } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ArrowUpRight, FileText } from 'lucide-react';
 
 interface MagazineCardProps {
   magazine: MagazineWithRelations;
@@ -22,62 +21,54 @@ export function MagazineCard({ magazine }: MagazineCardProps) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="group relative flex flex-col justify-between"
+      className="group relative flex flex-col justify-between cutout-card cutout-card-tape hover-lift-blue p-3.5 sm:p-4 bg-[#F4EFEB]"
     >
-      <Link href={`/magazine/${slug}`} className="block">
-        {/* Physical Magazine Cover Presentation with Hover Physics */}
-        <div className="relative mb-5 p-4 sm:p-5 rounded-sm bg-[#F0EBE1]/60 border border-[#E8E2D8] transition-all duration-300 group-hover:bg-[#E8E2D8]/80 group-hover:border-[#DCD5C9] group-hover:shadow-editorial-lg">
-          <div className="relative mx-auto flex justify-center perspective-[1000px]">
-            <motion.div
-              whileHover={{
-                y: -8,
-                rotateY: -3,
-                rotateX: 2,
-                transition: { duration: 0.25, ease: 'easeOut' },
-              }}
-              className="w-full flex justify-center"
-            >
+      <Link href={`/magazine/${slug}`} className="flex flex-col h-full justify-between">
+        {/* Physical Magazine Cover Presentation */}
+        <div className="relative mb-3.5 p-2.5 sm:p-3 bg-[#EAE3D7] border border-[#1A1A1A]/30 transition-all duration-300 group-hover:border-[#1A1A1A] overflow-hidden">
+          <div className="relative mx-auto flex justify-center perspective-[1000px] overflow-hidden">
+            <div className="w-full max-w-[260px] flex justify-center transition-transform duration-700 ease-out group-hover:scale-105">
               <MagazineCover magazine={magazine} size="md" />
-            </motion.div>
+            </div>
           </div>
 
           {/* Quick Peek Action Overlay Indicator */}
-          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="w-7 h-7 rounded-full bg-[#171717] text-[#F8F6F1] flex items-center justify-center shadow-md">
+          <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <div className="w-7 h-7 bg-[#1A1A1A] text-[#FAF7F2] flex items-center justify-center border border-[#FAF7F2]/20 shadow-md">
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
           </div>
         </div>
 
         {/* Editorial Metadata Block */}
-        <div className="space-y-2 px-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#B58A55]">
-              {department?.name || 'Departmental Review'}
-            </span>
-            <span className="text-[11px] font-mono text-[#77736C]">
-              {academic_year}
-            </span>
+        <div className="space-y-2 flex-1 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#C24A26] truncate max-w-[65%]">
+                {department?.name || 'Departmental Review'}
+              </span>
+              <span className="text-xs font-mono font-bold text-[#1A1A1A] bg-[#EAE3D7] px-2 py-0.5 border border-[#1A1A1A]/20 flex-shrink-0">
+                {academic_year}
+              </span>
+            </div>
+
+            <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1A1A] leading-snug group-hover:text-[#1B44B8] transition-colors line-clamp-1">
+              {title}
+            </h3>
+
+            {subtitle && (
+              <p className="text-sm text-[#555048] font-medium mt-1 line-clamp-1 italic">
+                &ldquo;{subtitle}&rdquo;
+              </p>
+            )}
           </div>
 
-          <h3 className="font-serif text-lg sm:text-xl font-medium text-[#171717] leading-snug group-hover:text-[#B58A55] transition-colors line-clamp-2">
-            {title}
-          </h3>
-
-          {subtitle && (
-            <p className="text-xs text-[#77736C] font-light line-clamp-1 italic">
-              {subtitle}
-            </p>
-          )}
-
-          <div className="editorial-rule my-3 opacity-60" />
-
-          <div className="flex items-center justify-between text-[11px] text-[#77736C]">
-            <span className="flex items-center gap-1">
-              <FileText className="w-3 h-3" />
+          <div className="pt-2.5 mt-2.5 border-t border-[#1A1A1A]/15 flex items-center justify-between text-xs sm:text-sm text-[#1A1A1A]">
+            <span className="flex items-center gap-1.5 font-mono font-semibold">
+              <FileText className="w-3.5 h-3.5 text-[#C24A26]" />
               <span>{page_count} Pages</span>
             </span>
-            <span className="font-mono text-[#44423E]">
+            <span className="font-mono text-xs font-bold uppercase text-[#1A1A1A] bg-[#EAE3D7] px-2 py-0.5 border border-[#1A1A1A]/20">
               {edition || 'Annual Issue'}
             </span>
           </div>
@@ -86,3 +77,4 @@ export function MagazineCard({ magazine }: MagazineCardProps) {
     </motion.article>
   );
 }
+

@@ -127,12 +127,12 @@ export function MagazineCover({
           {/* Top Editorial Masthead & Department Tag */}
           <div className="relative z-10 space-y-3">
             <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
-              <span className="text-[9px] font-mono tracking-widest uppercase opacity-75">
+              <span className="text-xs font-mono tracking-widest uppercase opacity-85 font-semibold">
                 ATHENAEUM ARCHIVE
               </span>
               <span
                 className={cn(
-                  'text-[9px] font-mono font-semibold px-2 py-0.5 rounded-sm tracking-wider uppercase',
+                  'text-xs font-mono font-bold px-2.5 py-1 rounded-sm tracking-wider uppercase',
                   theme.tagBg
                 )}
               >
@@ -140,21 +140,21 @@ export function MagazineCover({
               </span>
             </div>
 
-            <div className="text-[10px] uppercase tracking-widest opacity-60 font-mono">
+            <div className="text-xs sm:text-sm uppercase tracking-widest opacity-75 font-mono font-medium">
               {department?.name}
             </div>
           </div>
 
           {/* Center Title & Subtitle */}
-          <div className="relative z-10 my-auto py-4 space-y-2">
-            <div className="w-6 h-0.5 bg-[#B58A55] mb-2" />
-            <h2 className="font-serif text-xl sm:text-2xl font-normal tracking-tight leading-snug line-clamp-3">
+          <div className="relative z-10 my-auto py-4 space-y-2.5">
+            <div className="w-8 h-0.5 bg-[#B58A55] mb-2" />
+            <h2 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight leading-snug line-clamp-3">
               {title}
             </h2>
             {subtitle && (
               <p
                 className={cn(
-                  'font-serif text-xs italic font-light line-clamp-2',
+                  'font-serif text-sm sm:text-base italic font-light line-clamp-2 leading-relaxed',
                   theme.accent
                 )}
               >
@@ -164,8 +164,8 @@ export function MagazineCover({
           </div>
 
           {/* Bottom Academic Year & Issue Info */}
-          <div className="relative z-10 pt-3 border-t border-white/15 flex items-center justify-between text-[10px] font-mono">
-            <span className="opacity-75">{academic_year}</span>
+          <div className="relative z-10 pt-3.5 border-t border-white/15 flex items-center justify-between text-xs sm:text-sm font-mono font-semibold">
+            <span className="opacity-85">{academic_year}</span>
             <div className="flex items-center gap-2">
               {volume && <span>{volume}</span>}
               {issue && <span>• {issue}</span>}

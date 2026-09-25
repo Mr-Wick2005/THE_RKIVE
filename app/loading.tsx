@@ -4,7 +4,7 @@ import { Skeleton, MagazineCardSkeleton } from '@/components/ui/loading-skeleton
 
 export default function Loading() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8F6F1]">
+    <div className="flex flex-col min-h-screen bg-[#F8F6F0]">
       <Header />
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 sm:px-10 py-12 space-y-12">
         {/* Editorial Hero Skeleton */}
@@ -24,7 +24,7 @@ export default function Loading() {
         </div>
 
         {/* Featured Publications Grid Skeleton */}
-        <div className="space-y-6 pt-8 border-t border-[#E8E2D8]">
+        <div className="space-y-6 pt-8 border-t border-ink/15">
           <div className="space-y-2">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-8 w-64" />

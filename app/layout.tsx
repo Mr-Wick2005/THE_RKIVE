@@ -3,17 +3,17 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | Athenaeum — College Digital Archive',
-    default: 'Athenaeum — College Digital Magazine Platform',
+    template: '%s | THE RKIVE',
+    default: 'THE RKIVE — Independent Digital Publication & Magazine Archive',
   },
   description:
-    'A college-wide digital magazine publishing platform and academic archive for department publications, research papers, and student capstones.',
+    'A contemporary digital magazine archive and publishing platform preserving collegiate scholarship, research proceedings, and creative capstones.',
   keywords: [
+    'THE RKIVE',
     'Digital Magazine',
+    'Editorial Archive',
     'College Publications',
-    'Academic Archive',
-    'Engineering Journal',
-    'Athenaeum',
+    'Research Periodicals',
   ],
 };
 
@@ -23,8 +23,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full bg-[#F8F6F1]">
-      <body className="min-h-screen flex flex-col bg-[#F8F6F1] text-[#171717]">
+    <html lang="en" className="h-full bg-[#EAE3D7]">
+      <body className="min-h-screen flex flex-col bg-[#EAE3D7] paper-texture text-[#121210] selection:bg-[#1B44B8] selection:text-[#FAF7F2] relative">
+        <div className="noise-overlay" aria-hidden="true" />
         {children}
       </body>
     </html>

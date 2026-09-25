@@ -82,6 +82,17 @@ export function SuperAdminOverview({
               </Button>
             </Link>
 
+            <Link href="/admin/departments">
+              <Button
+                variant="outline"
+                size="md"
+                className="gap-2 border-[#E8E2D8] hover:bg-[#F8F6F1] text-[#171717]"
+              >
+                <Building2 className="w-4 h-4 text-[#77736C]" />
+                <span>Departments</span>
+              </Button>
+            </Link>
+
             <Link href="/admin/users">
               <Button
                 variant="outline"
@@ -173,6 +184,13 @@ export function SuperAdminOverview({
               Active publishing departments
             </p>
           </div>
+          <Link
+            href="/admin/departments"
+            className="text-[11px] font-mono text-[#77736C] hover:text-[#171717] flex items-center gap-1 pt-1"
+          >
+            <span>Manage Registry</span>
+            <ArrowRight className="w-3 h-3" />
+          </Link>
         </div>
 
         {/* Editorial Users */}
@@ -283,6 +301,14 @@ export function SuperAdminOverview({
                 Departments Directory
               </h2>
             </div>
+
+            <Link
+              href="/admin/departments"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#171717] hover:text-[#B58A55] transition-colors"
+            >
+              <span>Manage Registry</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
           <div className="bg-white border border-[#E8E2D8] rounded-sm overflow-hidden shadow-xs divide-y divide-[#E8E2D8]">

@@ -224,7 +224,7 @@ export function DigitalMagazineReader({
 
   return (
     <div
-      className="fixed inset-0 bg-[#F8F6F1] text-[#171717] select-none flex flex-col overflow-hidden z-30 font-sans"
+      className="fixed inset-0 bg-[#F8F6F0] text-[#121210] select-none flex flex-col overflow-hidden z-30 font-sans"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

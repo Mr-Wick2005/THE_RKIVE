@@ -3,8 +3,17 @@ import { cn } from '@/lib/utils';
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  variant?:
+    | 'primary'
+    | 'secondary'
+    | 'outline'
+    | 'ghost'
+    | 'danger'
+    | 'ink'
+    | 'terracotta'
+    | 'cobalt'
+    | 'paper';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
   isLoading?: boolean;
 }
 
@@ -22,25 +31,38 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none tracking-wide';
+      'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none tracking-wider uppercase font-nav text-sm';
 
     const variants = {
+      // Primary / Ink variants
       primary:
-        'bg-[#171717] text-[#F8F6F1] hover:bg-[#2C2C2A] focus:ring-[#171717] shadow-sm active:scale-[0.99]',
+        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm active:translate-y-px',
+      ink:
+        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm active:translate-y-px',
+      // Editorial color accents
+      terracotta:
+        'bg-terracotta text-paper-50 hover:bg-terracotta-700 border border-terracotta focus:ring-terracotta shadow-editorial-sm active:translate-y-px',
+      cobalt:
+        'bg-cobalt text-paper-50 hover:bg-cobalt-700 border border-cobalt focus:ring-cobalt shadow-editorial-sm active:translate-y-px',
+      // Secondary / Paper variants
       secondary:
-        'bg-[#E8E2D8] text-[#171717] hover:bg-[#DCD5C9] focus:ring-[#77736C]',
+        'bg-paper-300 text-ink hover:bg-paper-400 border border-ink/15 focus:ring-ink/40',
+      paper:
+        'bg-paper-100 text-ink hover:bg-paper-50 border border-ink/20 focus:ring-ink/40 shadow-card',
+      // Outline / Ghost / Danger
       outline:
-        'border border-[#E2DBD0] bg-white text-[#171717] hover:bg-[#F8F6F1] hover:border-[#CFC7BA] focus:ring-[#9E7D3B]',
+        'border border-ink/25 bg-paper-50/80 text-ink hover:bg-ink hover:text-paper-50 hover:border-ink focus:ring-ink transition-colors',
       ghost:
-        'text-[#77736C] hover:text-[#171717] hover:bg-[#E8E2D8]/40 focus:ring-[#77736C]',
+        'text-graphite hover:text-ink hover:bg-paper-300/40 focus:ring-ink/20',
       danger:
-        'bg-rose-700 text-white hover:bg-rose-800 focus:ring-rose-700',
+        'bg-rose-700 text-white hover:bg-rose-800 border border-rose-800 focus:ring-rose-700',
     };
 
     const sizes = {
-      sm: 'text-xs px-3 py-1.5 rounded-sm gap-1.5',
-      md: 'text-sm px-4 py-2 rounded-sm gap-2',
-      lg: 'text-base px-6 py-2.5 rounded-sm gap-2.5',
+      sm: 'text-xs px-3.5 py-2 rounded-xs gap-1.5',
+      md: 'text-sm px-5 py-2.5 rounded-xs gap-2',
+      lg: 'text-base px-7 py-3.5 rounded-xs gap-2.5',
+      icon: 'p-2.5 rounded-xs aspect-square',
     };
 
     return (
@@ -53,7 +75,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {isLoading ? (
           <>
             <svg
-              className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
+              className="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-current"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"

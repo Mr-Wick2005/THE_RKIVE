@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LogOut, ArrowLeft, Building2, PlusCircle, BookOpen, LayoutDashboard } from 'lucide-react';
+import { Shield, LogOut, ArrowLeft, Building2, PlusCircle, BookOpen, LayoutDashboard, Users } from 'lucide-react';
 import { Profile } from '@/types/auth';
 import { Badge } from '@/components/ui/badge';
 import { Department } from '@/types/department';
@@ -35,9 +35,15 @@ export function AdminHeader({ profile, department }: AdminHeaderProps) {
             active: pathname.startsWith('/admin/review'),
           },
           {
+            href: '/admin/departments',
+            label: 'Departments',
+            icon: Building2,
+            active: pathname.startsWith('/admin/departments'),
+          },
+          {
             href: '/admin/users',
             label: 'Editorial Staff',
-            icon: Building2,
+            icon: Users,
             active: pathname.startsWith('/admin/users'),
           },
         ]
