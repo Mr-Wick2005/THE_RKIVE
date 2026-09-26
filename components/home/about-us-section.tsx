@@ -48,7 +48,7 @@ export function AboutUsSection() {
               {/* Inner Art Frame / Canvas */}
               <div className="relative aspect-square w-full border-2 border-[#1A1A1A] overflow-hidden bg-[#EAE3D7] group">
                 <Image
-                  src="/images/rkive-painting.jpg"
+                  src="/images/rkive-painting.png"
                   alt="The Rkive Editorial Artwork"
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
