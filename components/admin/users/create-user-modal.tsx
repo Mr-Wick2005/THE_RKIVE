@@ -56,8 +56,8 @@ export function CreateUserModal({
 
       const result = await createDepartmentAdminAction(formData);
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Failed to provision department admin.');
+      if (!result || !result.success) {
+        setErrorMessage(result?.error || 'Failed to provision department admin.');
         setIsLoading(false);
         return;
       }

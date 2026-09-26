@@ -6,8 +6,7 @@ import { getActiveDepartments } from '@/lib/departments';
 import { ArchiveHeader } from '@/components/magazines/archive-header';
 import { ArchiveFilters } from '@/components/magazines/archive-filters';
 import { ArchiveResultsSection } from '@/components/magazines/archive-results-section';
-
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Digital Magazine Archive | THE RKIVE',

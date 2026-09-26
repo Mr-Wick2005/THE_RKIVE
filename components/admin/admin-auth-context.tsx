@@ -36,18 +36,108 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
   });
 
-  const isCheckingRef = useRef(false);
+  const inFlightAuthRef = useRef<Promise<void> | null>(null);
 
   const checkAuth = useCallback(async (forcedToken?: string) => {
-    if (isCheckingRef.current) return;
-    isCheckingRef.current = true;
+    if (!forcedToken && inFlightAuthRef.current) {
+      return inFlightAuthRef.current;
+    }
 
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const activeToken = forcedToken || session?.access_token;
+    const authPromise = (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const activeToken = forcedToken || session?.access_token;
 
-      if (!session || !session.user || !activeToken) {
+        if (!activeToken) {
+          setAuthState({
+            user: null,
+            profile: null,
+            department: null,
+            token: null,
+            isLoading: false,
+          });
+          if (pathname !== '/admin/login' && pathname !== '/admin/setup') {
+            router.replace('/admin/login');
+          }
+          return;
+        }
+
+        // Fetch verified profile from server using tab token
+        const res = await fetch('/api/admin/me', {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+          },
+        });
+
+        if (!res.ok) {
+          await supabase.auth.signOut();
+          setAuthState({
+            user: null,
+            profile: null,
+            department: null,
+            token: null,
+            isLoading: false,
+          });
+          if (pathname !== '/admin/login') {
+            router.replace('/admin/login?error=unauthorized_profile');
+          }
+          return;
+        }
+
+        const data = await res.json();
+        setAuthState({
+          user: session?.user || data.user,
+          profile: data.profile,
+          department: data.department || null,
+          token: activeToken,
+          isLoading: false,
+        });
+      } catch (err) {
+        console.error('[AdminAuth] Error checking session:', err);
+        setAuthState({
+          user: null,
+          profile: null,
+          department: null,
+          token: null,
+          isLoading: false,
+        });
+        if (pathname !== '/admin/login') {
+          router.replace('/admin/login');
+        }
+      } finally {
+        inFlightAuthRef.current = null;
+      }
+    })();
+
+    if (!forcedToken) {
+      inFlightAuthRef.current = authPromise;
+    }
+    return authPromise;
+  }, [pathname, router]);
+
+  // Initial mount verification and auth state listener (does not re-fire on route changes)
+  useEffect(() => {
+    checkAuth();
+
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.access_token) {
+          checkAuth(session.access_token);
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          setAuthState({
+            user: null,
+            profile: null,
+            department: null,
+            token: null,
+            isLoading: false,
+          });
+          if (pathname !== '/admin/login' && pathname !== '/admin/setup') {
+            router.replace('/admin/login');
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
         setAuthState({
           user: null,
           profile: null,
@@ -58,74 +148,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         if (pathname !== '/admin/login' && pathname !== '/admin/setup') {
           router.replace('/admin/login');
         }
-        return;
-      }
-
-      // Fetch verified profile from server using tab token
-      const res = await fetch('/api/admin/me', {
-        headers: {
-          Authorization: `Bearer ${activeToken}`,
-        },
-      });
-
-      if (!res.ok) {
-        await supabase.auth.signOut();
-        setAuthState({
-          user: null,
-          profile: null,
-          department: null,
-          token: null,
-          isLoading: false,
-        });
-        if (pathname !== '/admin/login') {
-          router.replace('/admin/login?error=unauthorized_profile');
-        }
-        return;
-      }
-
-      const data = await res.json();
-      setAuthState({
-        user: session.user,
-        profile: data.profile,
-        department: data.department || null,
-        token: activeToken,
-        isLoading: false,
-      });
-    } catch (err) {
-      console.error('[AdminAuth] Error checking session:', err);
-      setAuthState({
-        user: null,
-        profile: null,
-        department: null,
-        token: null,
-        isLoading: false,
-      });
-      if (pathname !== '/admin/login') {
-        router.replace('/admin/login');
-      }
-    } finally {
-      isCheckingRef.current = false;
-    }
-  }, [pathname, router]);
-
-  // Initial mount verification and auth state listener (does not re-fire on route changes)
-  useEffect(() => {
-    checkAuth();
-
-    const supabase = createClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session?.access_token) {
-          checkAuth(session.access_token);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setAuthState({
-          user: null,
-          profile: null,
-          department: null,
-          token: null,
-          isLoading: false,
-        });
       }
     });
 

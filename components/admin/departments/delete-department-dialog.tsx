@@ -41,8 +41,8 @@ export function DeleteDepartmentDialog({
 
       const result = await deleteDepartmentAction(department.id, session?.access_token);
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Failed to delete academic department.');
+      if (!result || !result.success) {
+        setErrorMessage(result?.error || 'Failed to delete academic department.');
         setIsLoading(false);
         return;
       }

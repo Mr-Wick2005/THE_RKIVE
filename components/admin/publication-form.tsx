@@ -114,11 +114,11 @@ export function PublicationForm({
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const result = await retryMagazineProcessingAction(initialData.id, session?.access_token);
-      if (result.success) {
+      if (result?.success) {
         setSuccessMessage('PDF processing started. Document pages are being generated.');
         router.refresh();
       } else {
-        setErrorMessage(result.error || 'Failed to start PDF processing.');
+        setErrorMessage(result?.error || 'Failed to start PDF processing.');
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Retry failed.');
@@ -164,9 +164,102 @@ export function PublicationForm({
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
 
+      const activeToken = session?.access_token;
+      if (!activeToken) {
+        setErrorMessage('Your administrative session has expired. Please sign in again.');
+        setIsSavingDraft(false);
+        setIsSubmittingReview(false);
+        setShowConfirmModal(false);
+        return;
+      }
+
+      const targetDeptId = selectedDepartment?.id || (department?.id);
+      if (!targetDeptId) {
+        setErrorMessage('Target academic department is missing.');
+        setIsSavingDraft(false);
+        setIsSubmittingReview(false);
+        setShowConfirmModal(false);
+        return;
+      }
+
+      const magazineId = initialData?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+
+      let directCoverUrl: string | null = null;
+      let directPdfPath: string | null = null;
+
+      // 1. Direct cover upload using server-signed URL
+      if (coverFile && magazineId && targetDeptId) {
+        try {
+          const uploadRes = await fetch('/api/admin/data', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${activeToken}`,
+            },
+            body: JSON.stringify({
+              action: 'get-upload-url',
+              fileType: 'cover',
+              departmentId: targetDeptId,
+              magazineId,
+              fileName: coverFile.name,
+            }),
+          });
+          const uploadInfo = await uploadRes.json();
+          if (uploadInfo.signedUrl) {
+            const putRes = await fetch(uploadInfo.signedUrl, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': coverFile.type || 'image/jpeg',
+              },
+              body: coverFile,
+            });
+            if (putRes.ok) {
+              directCoverUrl = uploadInfo.publicUrl;
+            }
+          }
+        } catch (uploadErr) {
+          console.warn('Direct cover upload warning, falling back to server action:', uploadErr);
+        }
+      }
+
+      // 2. Direct PDF upload using server-signed URL to bypass body limits and private bucket RLS
+      if (pdfFile && magazineId && targetDeptId) {
+        try {
+          const uploadRes = await fetch('/api/admin/data', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${activeToken}`,
+            },
+            body: JSON.stringify({
+              action: 'get-upload-url',
+              fileType: 'pdf',
+              departmentId: targetDeptId,
+              magazineId,
+            }),
+          });
+          const uploadInfo = await uploadRes.json();
+          if (uploadInfo.signedUrl) {
+            const putRes = await fetch(uploadInfo.signedUrl, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/pdf',
+              },
+              body: pdfFile,
+            });
+            if (putRes.ok) {
+              directPdfPath = uploadInfo.path;
+            }
+          }
+        } catch (uploadErr) {
+          console.warn('Direct PDF upload warning, falling back to server action:', uploadErr);
+        }
+      }
+
       const formData = new FormData();
-      if (session?.access_token) {
-        formData.set('access_token', session.access_token);
+      formData.set('access_token', activeToken);
+      if (magazineId) {
+        formData.set('id', magazineId);
       }
       formData.set('title', title);
       formData.set('subtitle', subtitle);
@@ -177,16 +270,17 @@ export function PublicationForm({
       formData.set('issue', issue);
       formData.set('page_count', pageCount);
       formData.set('submit_now', submitNow ? 'true' : 'false');
+      formData.set('department_id', targetDeptId);
 
-      if (selectedDepartment?.id) {
-        formData.set('department_id', selectedDepartment.id);
-      }
-
-      if (coverFile) {
+      if (directCoverUrl) {
+        formData.set('cover_image_url', directCoverUrl);
+      } else if (coverFile) {
         formData.set('cover_file', coverFile);
       }
 
-      if (pdfFile) {
+      if (directPdfPath) {
+        formData.set('original_pdf_url', directPdfPath);
+      } else if (pdfFile) {
         formData.set('pdf_file', pdfFile);
       }
 
@@ -194,8 +288,8 @@ export function PublicationForm({
         ? await updateMagazineAction(initialData.id, formData)
         : await createMagazineAction(formData);
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Operation failed. Please try again.');
+      if (!result || !result.success) {
+        setErrorMessage(result?.error || 'Operation failed. Please check the publication details and try again.');
         setIsSavingDraft(false);
         setIsSubmittingReview(false);
         setShowConfirmModal(false);

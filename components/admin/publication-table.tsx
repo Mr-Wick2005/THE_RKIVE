@@ -69,9 +69,23 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
 
   const handleStartSubmit = (mag: MagazineWithRelations) => {
     if (mag.processing_status !== 'COMPLETED') {
+      if (!mag.original_pdf_url) {
+        setFeedback({
+          type: 'error',
+          message: `No PDF document is attached to "${mag.title}". Click Edit to upload your PDF before submitting.`,
+        });
+        return;
+      }
+      if (mag.processing_status === 'PROCESSING' || mag.processing_status === 'QUEUED') {
+        setFeedback({
+          type: 'error',
+          message: `"${mag.title}" is currently generating pages. Please wait a moment for processing to complete.`,
+        });
+        return;
+      }
       setFeedback({
         type: 'error',
-        message: 'This publication must finish processing before it can be submitted for review.',
+        message: `PDF pages have not been generated yet for "${mag.title}". Click "Process PDF" below to render pages before submitting.`,
       });
       return;
     }
@@ -86,7 +100,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const result = await retryMagazineProcessingAction(id, session?.access_token);
-      if (result.success) {
+      if (result?.success) {
         setFeedback({
           type: 'success',
           message: `PDF processing started for "${title}". Pages are being generated.`,
@@ -95,7 +109,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       } else {
         setFeedback({
           type: 'error',
-          message: result.error || 'Failed to retry processing.',
+          message: result?.error || 'Failed to retry processing.',
         });
       }
     } catch (err: any) {
@@ -115,7 +129,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const result = await submitMagazineForReviewAction(submittingMag.id, session?.access_token);
-      if (result.success) {
+      if (result?.success) {
         setFeedback({
           type: 'success',
           message: `"${submittingMag.title}" has been submitted for college review.`,
@@ -125,7 +139,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       } else {
         setFeedback({
           type: 'error',
-          message: result.error || 'Failed to submit publication.',
+          message: result?.error || 'Failed to submit publication.',
         });
       }
     } catch (err: any) {
@@ -149,7 +163,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const result = await deleteMagazineAction(deletingMag.id, session?.access_token);
-      if (result.success) {
+      if (result?.success) {
         setFeedback({
           type: 'success',
           message: `"${deletingMag.title}" was permanently deleted.`,
@@ -159,7 +173,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       } else {
         setFeedback({
           type: 'error',
-          message: result.error || 'Failed to delete publication.',
+          message: result?.error || 'Failed to delete publication.',
         });
       }
     } catch (err: any) {
@@ -321,16 +335,20 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                             status={mag.processing_status}
                             pageCount={mag.page_count}
                           />
-                          {isProcessingFailed && (
+                          {(isProcessingFailed || (Boolean(mag.original_pdf_url) && (mag.processing_status === 'NOT_STARTED' || !mag.processing_status))) && (
                             <button
                               type="button"
                               onClick={() => handleRetryProcessing(mag.id, mag.title)}
                               disabled={retryingId === mag.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono rounded-sm border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 transition-colors"
-                              title="Retry PDF Processing"
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono rounded-sm border transition-colors cursor-pointer ${
+                                isProcessingFailed
+                                  ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                                  : 'border-[#171717]/20 bg-white text-[#171717] hover:bg-[#171717] hover:text-[#F8F6F1]'
+                              }`}
+                              title={isProcessingFailed ? 'Retry PDF Processing' : 'Generate WebP Pages from PDF'}
                             >
                               <RefreshCw className={`w-2.5 h-2.5 ${retryingId === mag.id ? 'animate-spin' : ''}`} />
-                              <span>Retry</span>
+                              <span>{isProcessingFailed ? 'Retry' : 'Process PDF'}</span>
                             </button>
                           )}
                         </div>

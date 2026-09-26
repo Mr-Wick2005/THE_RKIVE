@@ -89,8 +89,8 @@ export function DepartmentModal({
         result = await createDepartmentAction(formData);
       }
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Failed to save academic department.');
+      if (!result || !result.success) {
+        setErrorMessage(result?.error || 'Failed to save academic department.');
         setIsLoading(false);
         return;
       }

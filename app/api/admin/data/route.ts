@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentProfile } from '@/lib/auth/session';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getDepartmentsWithStats, getDepartmentById, getActiveDepartments } from '@/lib/departments';
 import {
   calculateStatsFromMagazines,
@@ -9,6 +10,8 @@ import {
   getMagazineForReview,
 } from '@/lib/magazines/admin';
 import { getEditorialUsers, getEditorialUserStats } from '@/lib/auth/bootstrap';
+import { getCoverStoragePath, getPdfStoragePath } from '@/lib/storage/upload';
+import { processMagazinePdf } from '@/lib/pdf/pipeline';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,6 +149,76 @@ export async function POST(request: Request) {
           profile,
           departments,
         });
+      }
+
+      case 'get-upload-url': {
+        const { fileType, departmentId, magazineId, fileName } = body;
+        if (!departmentId || !magazineId) {
+          return NextResponse.json({ error: 'Missing departmentId or magazineId' }, { status: 400 });
+        }
+        if (profile.role !== 'SUPER_ADMIN' && profile.department_id !== departmentId) {
+          return NextResponse.json({ error: 'Forbidden: Department mismatch' }, { status: 403 });
+        }
+
+        const supabase = createAdminClient();
+        if (fileType === 'pdf') {
+          const filePath = getPdfStoragePath(departmentId, magazineId);
+          const { data: signData, error: signError } = await supabase.storage
+            .from('magazine-pdfs')
+            .createSignedUploadUrl(filePath);
+
+          if (signError || !signData) {
+            return NextResponse.json({ error: signError?.message || 'Failed to generate upload URL' }, { status: 500 });
+          }
+          return NextResponse.json({
+            signedUrl: signData.signedUrl,
+            token: signData.token,
+            path: filePath,
+            bucket: 'magazine-pdfs',
+          });
+        } else if (fileType === 'cover') {
+          const filePath = getCoverStoragePath(departmentId, magazineId, fileName || 'cover.jpg');
+          const { data: signData, error: signError } = await supabase.storage
+            .from('magazine-covers')
+            .createSignedUploadUrl(filePath);
+
+          if (signError || !signData) {
+            return NextResponse.json({ error: signError?.message || 'Failed to generate upload URL' }, { status: 500 });
+          }
+          const { data: { publicUrl } } = supabase.storage.from('magazine-covers').getPublicUrl(filePath);
+          return NextResponse.json({
+            signedUrl: signData.signedUrl,
+            token: signData.token,
+            path: filePath,
+            publicUrl,
+            bucket: 'magazine-covers',
+          });
+        }
+        return NextResponse.json({ error: 'Invalid fileType' }, { status: 400 });
+      }
+
+      case 'process-pdf': {
+        if (!id) {
+          return NextResponse.json({ error: 'Missing publication ID' }, { status: 400 });
+        }
+        const force = body.force === true;
+        const processResult = await processMagazinePdf(id, {
+          requestingUserId: profile.id,
+          forceReprocess: force,
+        });
+        return NextResponse.json(processResult);
+      }
+
+      case 'process-step': {
+        if (!id) {
+          return NextResponse.json({ error: 'Missing publication ID' }, { status: 400 });
+        }
+        const maxPages = typeof body.maxPages === 'number' ? body.maxPages : 4;
+        const processResult = await processMagazinePdf(id, {
+          requestingUserId: profile.id,
+          maxPagesPerRun: maxPages,
+        });
+        return NextResponse.json(processResult);
       }
 
       default:

@@ -48,10 +48,12 @@ export default function AdminDashboardPage() {
 
     if (token) {
       loadDashboard();
+    } else {
+      setIsFetching(false);
     }
   }, [profile, token, isLoading, router]);
 
-  if (isLoading || isFetching || !profile || !data) {
+  if (isLoading || (isFetching && !data)) {
     return (
       <div className="min-h-screen bg-[#F8F6F0] flex items-center justify-center">
         <div className="text-center space-y-3">
@@ -62,6 +64,10 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     );
+  }
+
+  if (!profile || !data) {
+    return null;
   }
 
   return (

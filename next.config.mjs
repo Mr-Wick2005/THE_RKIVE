@@ -10,7 +10,10 @@ const nextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ['lucide-react'],
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
     serverComponentsExternalPackages: ['@napi-rs/canvas', 'sharp', 'pdfjs-dist', 'pdf-lib'],
   },
   webpack: (config) => {

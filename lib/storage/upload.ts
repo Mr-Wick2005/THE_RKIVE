@@ -21,15 +21,20 @@ export interface FileValidationResult {
 /**
  * Validates a magazine cover image file
  */
-export function validateCoverFile(file: File): FileValidationResult {
-  if (!ALLOWED_COVER_MIME_TYPES.includes(file.type.toLowerCase())) {
+export function validateCoverFile(file: File | { name?: string; type?: string; size?: number }): FileValidationResult {
+  const fileName = file?.name?.toLowerCase() || '';
+  const fileType = file?.type?.toLowerCase() || '';
+  const isCoverMime = ALLOWED_COVER_MIME_TYPES.includes(fileType);
+  const isCoverExt = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.webp');
+
+  if (!isCoverMime && !isCoverExt) {
     return {
       valid: false,
       error: 'Cover image must be a valid JPG, PNG, or WEBP file.',
     };
   }
 
-  if (file.size > MAX_COVER_SIZE_BYTES) {
+  if (file.size && file.size > MAX_COVER_SIZE_BYTES) {
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
     return {
       valid: false,
@@ -43,18 +48,20 @@ export function validateCoverFile(file: File): FileValidationResult {
 /**
  * Validates a magazine original PDF document
  */
-export function validatePdfFile(file: File): FileValidationResult {
-  const isPdfMime = ALLOWED_PDF_MIME_TYPES.includes(file.type.toLowerCase());
-  const isPdfExtension = file.name.toLowerCase().endsWith('.pdf');
+export function validatePdfFile(file: File | { name?: string; type?: string; size?: number }): FileValidationResult {
+  const fileName = file?.name?.toLowerCase() || '';
+  const fileType = file?.type?.toLowerCase() || '';
+  const isPdfMime = fileType === 'application/pdf' || fileType === 'application/x-pdf' || fileType === 'application/octet-stream';
+  const isPdfExtension = fileName.endsWith('.pdf');
 
   if (!isPdfMime && !isPdfExtension) {
     return {
       valid: false,
-      error: 'Please upload a valid PDF document.',
+      error: 'Please upload a valid PDF document (.pdf file format).',
     };
   }
 
-  if (file.size > MAX_PDF_SIZE_BYTES) {
+  if (file.size && file.size > MAX_PDF_SIZE_BYTES) {
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
     return {
       valid: false,
@@ -74,7 +81,7 @@ export function getCoverStoragePath(
   magazineId: string,
   originalFilename: string
 ): string {
-  const ext = originalFilename.split('.').pop()?.toLowerCase() || 'webp';
+  const ext = originalFilename?.split('.').pop()?.toLowerCase() || 'webp';
   const timestamp = Date.now();
   return `${departmentId}/${magazineId}/cover-${timestamp}.${ext}`;
 }
@@ -98,24 +105,34 @@ export async function uploadMagazineCover(
   supabase: SupabaseClient<any, any, any> | any,
   departmentId: string,
   magazineId: string,
-  file: File
+  file: File | Blob | any
 ): Promise<{ path: string; publicUrl: string }> {
   const validation = validateCoverFile(file);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  const filePath = getCoverStoragePath(departmentId, magazineId, file.name);
+  const fileName = (file as any).name || 'cover.jpg';
+  const filePath = getCoverStoragePath(departmentId, magazineId, fileName);
 
+  // In Node.js server environments, converting to ArrayBuffer/Buffer ensures seamless upload
+  const isNode = typeof window === 'undefined';
+  let uploadPayload: any = file;
+  if (isNode && typeof (file as any).arrayBuffer === 'function') {
+    const arrayBuffer = await file.arrayBuffer();
+    uploadPayload = Buffer.from(arrayBuffer);
+  }
+
+  const contentType = (file as any).type || 'image/jpeg';
   const { data, error } = await supabase.storage
     .from('magazine-covers')
-    .upload(filePath, file, {
+    .upload(filePath, uploadPayload, {
       upsert: true,
-      contentType: file.type,
+      contentType,
     });
 
   if (error) {
-    console.error('Error uploading cover to storage:', error);
+    console.error('[Storage] Error uploading cover to magazine-covers:', error);
     throw new Error(`Failed to upload cover image: ${error.message}`);
   }
 
@@ -133,7 +150,7 @@ export async function uploadMagazinePdf(
   supabase: SupabaseClient<any, any, any> | any,
   departmentId: string,
   magazineId: string,
-  file: File
+  file: File | Blob | any
 ): Promise<{ path: string }> {
   const validation = validatePdfFile(file);
   if (!validation.valid) {
@@ -142,15 +159,23 @@ export async function uploadMagazinePdf(
 
   const filePath = getPdfStoragePath(departmentId, magazineId);
 
+  // In Node.js server environments, converting to ArrayBuffer/Buffer ensures seamless upload
+  const isNode = typeof window === 'undefined';
+  let uploadPayload: any = file;
+  if (isNode && typeof (file as any).arrayBuffer === 'function') {
+    const arrayBuffer = await file.arrayBuffer();
+    uploadPayload = Buffer.from(arrayBuffer);
+  }
+
   const { data, error } = await supabase.storage
     .from('magazine-pdfs')
-    .upload(filePath, file, {
+    .upload(filePath, uploadPayload, {
       upsert: true,
       contentType: 'application/pdf',
     });
 
   if (error) {
-    console.error('Error uploading PDF to storage:', error);
+    console.error('[Storage] Error uploading PDF to magazine-pdfs:', error);
     throw new Error(`Failed to upload PDF file: ${error.message}`);
   }
 

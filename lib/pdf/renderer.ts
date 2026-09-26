@@ -12,10 +12,10 @@ if (typeof (globalThis as any).Path2D === 'undefined') {
 
 function getPdfJsResourcePaths() {
   const rootDir = process.cwd();
-  // Ensure trailing path separator for PDF.js URL resolution
-  const cMapUrl = path.join(rootDir, 'node_modules', 'pdfjs-dist', 'cmaps') + path.sep;
+  // Ensure normalized forward-slash URL format with trailing slash for PDF.js font/cMap loader
+  const cMapUrl = path.join(rootDir, 'node_modules', 'pdfjs-dist', 'cmaps').replace(/\\/g, '/') + '/';
   const standardFontDataUrl =
-    path.join(rootDir, 'node_modules', 'pdfjs-dist', 'standard_fonts') + path.sep;
+    path.join(rootDir, 'node_modules', 'pdfjs-dist', 'standard_fonts').replace(/\\/g, '/') + '/';
   return { cMapUrl, standardFontDataUrl };
 }
 
@@ -75,14 +75,19 @@ export interface RenderedPage {
 export interface RenderOptions {
   /**
    * Scale factor for rasterization.
-   * Default: 3.0 (Produces ~216 DPI print-quality rendering for crisp text on Retina/4K screens)
+   * Default: 2.0 (Produces ~150-180 DPI high-DPI rendering, sharp text without 4K bloat)
    */
   scale?: number;
   /**
    * WebP compression quality for full pages (0-100).
-   * Default: 92 (Visually lossless high-fidelity rendering)
+   * Default: 86 (Visually lossless, fast compression)
    */
   pageQuality?: number;
+  /**
+   * WebP compression effort (0-6).
+   * Default: 3 (Optimal balance: ~3x faster than effort 5 with negligible size difference)
+   */
+  pageEffort?: number;
   /**
    * Max width for page thumbnails in pixels.
    * Default: 360
@@ -90,7 +95,7 @@ export interface RenderOptions {
   thumbnailWidth?: number;
   /**
    * WebP compression quality for thumbnails (0-100).
-   * Default: 85
+   * Default: 80
    */
   thumbnailQuality?: number;
   /**
@@ -99,22 +104,18 @@ export interface RenderOptions {
   onProgress?: (currentPage: number, totalPages: number) => void;
 }
 
-/**
- * Renders every page of a PDF buffer into high-resolution, print-quality WebP images and thumbnails.
- * Fonts, vector graphics, transparency, and layout are preserved with exact fidelity using Path2D vector glyphs.
- */
-export async function renderPdfPages(
-  pdfBuffer: Buffer | Uint8Array,
-  options: RenderOptions = {}
-): Promise<{ totalPages: number; pages: RenderedPage[] }> {
-  const {
-    scale = 3.0,
-    pageQuality = 92,
-    thumbnailWidth = 360,
-    thumbnailQuality = 85,
-    onProgress,
-  } = options;
+export interface LoadedPdfDoc {
+  pdfDoc: any;
+  totalPages: number;
+  canvasFactory: NapiCanvasFactory;
+}
 
+/**
+ * Loads a PDF document buffer into memory using PDF.js
+ */
+export async function loadPdfDocument(
+  pdfBuffer: Buffer | Uint8Array
+): Promise<LoadedPdfDoc> {
   const pdfjsLib = await getPdfJs();
   const canvasFactory = new NapiCanvasFactory();
   const { cMapUrl, standardFontDataUrl } = getPdfJsResourcePaths();
@@ -125,70 +126,110 @@ export async function renderPdfPages(
     cMapPacked: true,
     standardFontDataUrl,
     useSystemFonts: true,
-    disableFontFace: true, // Enables vector Path2D glyph rendering in server-side Canvas
+    disableFontFace: true,
     verbosity: 0,
     canvasFactory: canvasFactory,
   });
 
   const pdfDoc = await loadingTask.promise;
-  const totalPages = pdfDoc.numPages;
+  return {
+    pdfDoc,
+    totalPages: pdfDoc.numPages,
+    canvasFactory,
+  };
+}
+
+/**
+ * Renders a single PDF page to high-quality WebP and thumbnail without retaining canvas memory
+ */
+export async function renderSinglePdfPage(
+  pdfDoc: any,
+  pageNum: number,
+  canvasFactory: NapiCanvasFactory,
+  options: RenderOptions = {}
+): Promise<RenderedPage> {
+  const {
+    scale = 2.0,
+    pageQuality = 86,
+    pageEffort = 3,
+    thumbnailWidth = 360,
+    thumbnailQuality = 80,
+  } = options;
+
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale });
+
+  const width = Math.floor(viewport.width);
+  const height = Math.floor(viewport.height);
+
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // Fill clean white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  const renderContext = {
+    canvasContext: ctx as any,
+    viewport: viewport,
+    canvasFactory: canvasFactory,
+  };
+
+  await page.render(renderContext).promise;
+
+  // Extract raw pixel buffer directly from napi-rs canvas (bypasses PNG encoding overhead)
+  const rawData = canvas.data();
+
+  // Convert & optimize to high-fidelity WebP using Sharp directly from raw BGRA/RGBA pixels
+  const optimizedWebpBuffer = await sharp(rawData, {
+    raw: { width, height, channels: 4 },
+  })
+    .webp({
+      quality: pageQuality,
+      effort: pageEffort,
+      smartSubsample: true,
+    })
+    .toBuffer();
+
+  // Generate separate thumbnail WebP
+  const thumbnailWebpBuffer = await sharp(rawData, {
+    raw: { width, height, channels: 4 },
+  })
+    .resize({ width: thumbnailWidth, withoutEnlargement: true })
+    .webp({ quality: thumbnailQuality, effort: 2 })
+    .toBuffer();
+
+  // Explicitly cleanup page resources in PDF.js
+  if (typeof page.cleanup === 'function') {
+    page.cleanup();
+  }
+
+  return {
+    pageNumber: pageNum,
+    imageBuffer: optimizedWebpBuffer,
+    thumbnailBuffer: thumbnailWebpBuffer,
+    width,
+    height,
+    fileSize: optimizedWebpBuffer.length,
+    thumbnailFileSize: thumbnailWebpBuffer.length,
+    mimeType: 'image/webp',
+  };
+}
+
+/**
+ * Renders all or specified pages of a PDF buffer sequentially into high-resolution WebP images.
+ */
+export async function renderPdfPages(
+  pdfBuffer: Buffer | Uint8Array,
+  options: RenderOptions = {}
+): Promise<{ totalPages: number; pages: RenderedPage[] }> {
+  const { onProgress, ...renderOpts } = options;
+  const { pdfDoc, totalPages, canvasFactory } = await loadPdfDocument(pdfBuffer);
   const pages: RenderedPage[] = [];
 
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-    const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
-
-    const canvasWidth = Math.floor(viewport.width);
-    const canvasHeight = Math.floor(viewport.height);
-
-    const canvas = createCanvas(canvasWidth, canvasHeight);
-    const ctx = canvas.getContext('2d');
-
-    // Fill clean white background to ensure opaque publication surface
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-    // Render PDF page onto canvas
-    const renderContext = {
-      canvasContext: ctx as any,
-      viewport: viewport,
-      canvasFactory: canvasFactory,
-    };
-
-    await page.render(renderContext).promise;
-
-    // Convert canvas to raw PNG buffer
-    const rawPngBuffer = canvas.toBuffer('image/png');
-
-    // Convert & optimize to high-fidelity WebP using Sharp
-    const optimizedWebpBuffer = await sharp(rawPngBuffer)
-      .webp({
-        quality: pageQuality,
-        effort: 5,
-        smartSubsample: true,
-      })
-      .toBuffer();
-
-    const imageMetadata = await sharp(optimizedWebpBuffer).metadata();
-    const finalWidth = imageMetadata.width || canvasWidth;
-    const finalHeight = imageMetadata.height || canvasHeight;
-
-    // Generate separate thumbnail WebP
-    const thumbnailWebpBuffer = await sharp(rawPngBuffer)
-      .resize({ width: thumbnailWidth, withoutEnlargement: true })
-      .webp({ quality: thumbnailQuality, effort: 4 })
-      .toBuffer();
-
-    pages.push({
-      pageNumber: pageNum,
-      imageBuffer: optimizedWebpBuffer,
-      thumbnailBuffer: thumbnailWebpBuffer,
-      width: finalWidth,
-      height: finalHeight,
-      fileSize: optimizedWebpBuffer.length,
-      thumbnailFileSize: thumbnailWebpBuffer.length,
-      mimeType: 'image/webp',
-    });
+    const rendered = await renderSinglePdfPage(pdfDoc, pageNum, canvasFactory, renderOpts);
+    pages.push(rendered);
 
     if (onProgress) {
       onProgress(pageNum, totalPages);

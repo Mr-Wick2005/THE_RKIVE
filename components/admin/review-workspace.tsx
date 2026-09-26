@@ -79,8 +79,8 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await approveMagazineAction(magazine.id, undefined, session?.access_token);
-      if (!res.success) {
-        setActionError(res.error || 'Failed to approve publication.');
+      if (!res?.success) {
+        setActionError(res?.error || 'Failed to approve publication.');
       } else {
         setActionSuccess('Publication successfully approved and ready for publishing.');
         router.refresh();
@@ -100,8 +100,8 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await rejectMagazineAction(magazine.id, reason, session?.access_token);
-      if (!res.success) {
-        setActionError(res.error || 'Failed to reject publication.');
+      if (!res?.success) {
+        setActionError(res?.error || 'Failed to reject publication.');
       } else {
         setIsRejectModalOpen(false);
         setActionSuccess('Publication returned to department with required revisions.');
@@ -122,8 +122,8 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await publishMagazineAction(magazine.id, session?.access_token);
-      if (!res.success) {
-        setActionError(res.error || 'Failed to publish magazine.');
+      if (!res?.success) {
+        setActionError(res?.error || 'Failed to publish magazine.');
       } else {
         setActionSuccess('Publication officially published to the College Digital Archive!');
         router.refresh();
@@ -146,8 +146,8 @@ export function ReviewWorkspace({ magazine }: ReviewWorkspaceProps) {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await archiveMagazineAction(magazine.id, session?.access_token);
-      if (!res.success) {
-        setActionError(res.error || 'Failed to archive magazine.');
+      if (!res?.success) {
+        setActionError(res?.error || 'Failed to archive magazine.');
       } else {
         setActionSuccess('Publication moved to institutional archive.');
         router.refresh();

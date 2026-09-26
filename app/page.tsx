@@ -8,8 +8,7 @@ import {
   DepartmentsSection,
   AboutUsSection,
 } from '@/components/home';
-
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'THE RKIVE — College Digital Magazine Archive & Publications',

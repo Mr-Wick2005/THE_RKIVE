@@ -44,8 +44,8 @@ export function SuperAdminSetupForm() {
 
       const result = await bootstrapFirstSuperAdminAction(formData);
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Failed to bootstrap Super Administrator.');
+      if (!result || !result.success) {
+        setErrorMessage(result?.error || 'Failed to bootstrap Super Administrator.');
         setIsLoading(false);
         return;
       }

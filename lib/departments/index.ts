@@ -136,41 +136,35 @@ export async function getActiveDepartments(): Promise<Department[]> {
  * Fetches departments along with their count of published magazines
  */
 export async function getDepartmentsWithStats(): Promise<DepartmentWithStats[]> {
-  const departments = await getActiveDepartments();
-
-  if (departments.length === 0) {
-    return [];
-  }
-
   if (!isSupabaseConfigured()) {
-    return departments.map((d) => ({
-      ...d,
-      magazine_count: 0,
-      latest_magazine_year: undefined,
-    }));
+    return [];
   }
 
   return withTimeout(
     (async () => {
       try {
         const supabase = createClient();
-        const { data: magazines, error } = await supabase
-          .from('magazines')
-          .select('department_id, academic_year')
-          .eq('status', 'PUBLISHED');
+        const [deptRes, magRes] = await Promise.all([
+          supabase
+            .from('departments')
+            .select('*')
+            .eq('is_active', true)
+            .order('name', { ascending: true }),
+          supabase
+            .from('magazines')
+            .select('department_id, academic_year')
+            .eq('status', 'PUBLISHED'),
+        ]);
 
-        if (error || !magazines || magazines.length === 0) {
-          return departments.map((d) => ({
-            ...d,
-            magazine_count: 0,
-            latest_magazine_year: undefined,
-          }));
-        }
+        const departments: Department[] = deptRes.data || [];
+        const magazines = magRes.data || [];
+
+        if (departments.length === 0) return [];
 
         const countMap: Record<string, number> = {};
         const yearMap: Record<string, string> = {};
 
-        (magazines as unknown as Array<{ department_id: string; academic_year: string }>).forEach((m) => {
+        magazines.forEach((m: any) => {
           countMap[m.department_id] = (countMap[m.department_id] || 0) + 1;
           if (!yearMap[m.department_id] || m.academic_year > yearMap[m.department_id]) {
             yearMap[m.department_id] = m.academic_year;
@@ -184,19 +178,11 @@ export async function getDepartmentsWithStats(): Promise<DepartmentWithStats[]> 
         }));
       } catch (err) {
         console.error('Error in getDepartmentsWithStats:', err);
-        return departments.map((d) => ({
-          ...d,
-          magazine_count: 0,
-          latest_magazine_year: undefined,
-        }));
+        return [];
       }
     })(),
     2500,
-    departments.map((d) => ({
-      ...d,
-      magazine_count: 0,
-      latest_magazine_year: undefined,
-    }))
+    []
   );
 }
 
