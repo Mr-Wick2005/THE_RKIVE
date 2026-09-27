@@ -55,6 +55,20 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
     null
   );
 
+  // Passive polling: refresh table state when publications are actively processing
+  React.useEffect(() => {
+    const hasActiveProcessing = magazines.some(
+      (m) => m.processing_status === 'PROCESSING' || m.processing_status === 'QUEUED'
+    );
+    if (!hasActiveProcessing) return;
+
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [magazines, router]);
+
   // Filter magazines
   const filtered = magazines.filter((m) => {
     const matchesSearch =

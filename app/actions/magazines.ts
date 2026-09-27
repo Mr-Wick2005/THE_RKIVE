@@ -6,6 +6,7 @@ import { getCurrentProfile } from '@/lib/auth/session';
 import { generateUniqueMagazineSlug, recordStatusTransition } from '@/lib/magazines/admin';
 import { uploadMagazineCover, uploadMagazinePdf, deleteMagazineStorageAssets } from '@/lib/storage/upload';
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
+import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { isSupabaseConfigured } from '@/lib/utils';
 import { MagazineProcessingStatus, MagazineStatus } from '@/types/magazine';
 
@@ -111,58 +112,23 @@ export async function createMagazineAction(formData: FormData): Promise<ActionRe
 
     const magazineId = magazine.id;
 
-    // 2. Handle Cover Upload if attached as file (fallback)
-    const coverFile = formData.get('cover_file') as File | null;
-    if (!coverUrl && coverFile && coverFile.size > 0) {
+    // 2. Queue durable PDF processing job if PDF path was supplied
+    if (pdfUrl) {
       try {
-        const { publicUrl } = await uploadMagazineCover(
-          supabase,
-          departmentId,
-          magazineId,
-          coverFile
-        );
-        coverUrl = publicUrl;
-      } catch (err: any) {
-        console.error('[Action] Cover upload failure:', err);
-        return { success: false, error: `Failed to upload cover image: ${err.message}` };
+        await (supabase.from('pdf_processing_jobs') as any).upsert({
+          magazine_id: magazineId,
+          status: 'QUEUED',
+          available_at: new Date().toISOString(),
+          attempts: 0,
+        }, { onConflict: 'magazine_id' });
+        console.log(`[PUBLICATION_CREATE] publication_id=${magazineId} pdf_attached=true job_queued=true`);
+        // Kick off autonomous worker chain
+        dispatchWorkerContinuation(magazineId);
+      } catch (jobErr) {
+        console.warn(`[PUBLICATION_CREATE] Non-fatal job queue insertion note:`, jobErr);
       }
-    }
-
-    // 3. Handle PDF Upload if attached as file (fallback)
-    const pdfFile = formData.get('pdf_file') as File | null;
-    if (!pdfUrl && pdfFile && pdfFile.size > 0) {
-      try {
-        const { path } = await uploadMagazinePdf(
-          supabase,
-          departmentId,
-          magazineId,
-          pdfFile
-        );
-        pdfUrl = path;
-        hasPdfUploaded = true;
-      } catch (err: any) {
-        console.error('[Action] PDF upload failure:', err);
-        return { success: false, error: `Failed to upload PDF document: ${err.message}` };
-      }
-    }
-
-    // 4. Update Magazine record with file paths if newly uploaded
-    if ((!insertPayload.cover_image_url && coverUrl) || (!insertPayload.original_pdf_url && pdfUrl)) {
-      const updates: Record<string, any> = {};
-      if (coverUrl) updates.cover_image_url = coverUrl;
-      if (pdfUrl) {
-        updates.original_pdf_url = pdfUrl;
-        updates.processing_status = 'QUEUED' as MagazineProcessingStatus;
-      }
-
-      await (supabase.from('magazines') as any).update(updates).eq('id', magazineId);
-    }
-
-    // 5. Initiate background processing without blocking the HTTP response
-    if (hasPdfUploaded) {
-      processMagazinePdf(magazineId, { requestingUserId: profile.id }).catch((procErr: any) => {
-        console.error('[PDF_PROCESS Background Error]:', procErr);
-      });
+    } else {
+      console.log(`[PUBLICATION_CREATE] publication_id=${magazineId} pdf_attached=false`);
     }
 
     revalidatePath('/admin/dashboard');
@@ -170,7 +136,7 @@ export async function createMagazineAction(formData: FormData): Promise<ActionRe
 
     return { success: true, magazineId, slug: magazine.slug };
   } catch (err: any) {
-    console.error('Unexpected error in createMagazineAction:', err);
+    console.error('[PUBLICATION_CREATE] Unexpected error in createMagazineAction:', err);
     return { success: false, error: err.message || 'An unexpected error occurred.' };
   }
 }
@@ -243,49 +209,18 @@ export async function updateMagazineAction(
 
     const directCoverUrl = (formData.get('cover_image_url') as string)?.trim() || null;
     const directPdfUrl = (formData.get('original_pdf_url') as string)?.trim() || null;
-    const pdfFile = formData.get('pdf_file') as File | null;
-    const coverFile = formData.get('cover_file') as File | null;
 
     let newPdfUploaded = false;
 
     if (directCoverUrl) {
       updates.cover_image_url = directCoverUrl;
-    } else if (coverFile && coverFile.size > 0) {
-      try {
-        const { publicUrl } = await uploadMagazineCover(
-          supabase,
-          existing.department_id,
-          id,
-          coverFile
-        );
-        updates.cover_image_url = publicUrl;
-      } catch (err: any) {
-        console.error('[Action] Cover update upload failure:', err);
-        return { success: false, error: `Failed to upload cover image: ${err.message}` };
-      }
     }
 
-    if (directPdfUrl) {
+    if (directPdfUrl && directPdfUrl !== existing.original_pdf_url) {
       updates.original_pdf_url = directPdfUrl;
       updates.processing_status = 'QUEUED' as MagazineProcessingStatus;
       updates.processing_error = null;
       newPdfUploaded = true;
-    } else if (pdfFile && pdfFile.size > 0) {
-      try {
-        const { path } = await uploadMagazinePdf(
-          supabase,
-          existing.department_id,
-          id,
-          pdfFile
-        );
-        updates.original_pdf_url = path;
-        updates.processing_status = 'QUEUED' as MagazineProcessingStatus;
-        updates.processing_error = null;
-        newPdfUploaded = true;
-      } catch (err: any) {
-        console.error('[Action] PDF update upload failure:', err);
-        return { success: false, error: `Failed to upload PDF document: ${err.message}` };
-      }
     }
 
     if (submitForReview && (newPdfUploaded || existing.processing_status !== 'COMPLETED')) {
@@ -299,14 +234,23 @@ export async function updateMagazineAction(
       .eq('id', id);
 
     if (updateError) {
-      console.error('Error updating magazine:', updateError);
+      console.error('[Action] Error updating magazine:', updateError);
       return { success: false, error: updateError.message || 'Failed to update publication.' };
     }
 
     if (newPdfUploaded) {
-      processMagazinePdf(id, { requestingUserId: profile.id }).catch((procErr: any) => {
-        console.error('[PDF_PROCESS Background Error on update]:', procErr);
-      });
+      try {
+        await (supabase.from('pdf_processing_jobs') as any).upsert({
+          magazine_id: id,
+          status: 'QUEUED',
+          available_at: new Date().toISOString(),
+          attempts: 0,
+        }, { onConflict: 'magazine_id' });
+        console.log(`[Action] Updated publication ${id} with new PDF, queued processing job.`);
+        dispatchWorkerContinuation(id);
+      } catch (jobErr) {
+        console.warn(`[Action] Non-fatal job queue note:`, jobErr);
+      }
     }
 
     revalidatePath('/admin/dashboard');
@@ -351,7 +295,7 @@ export async function retryMagazineProcessingAction(id: string, token?: string):
       return { success: false, error: 'No PDF file is uploaded for this publication. Please upload a PDF first.' };
     }
 
-    // Set status to QUEUED
+    // Set status to QUEUED and upsert job queue entry
     await (supabase.from('magazines') as any)
       .update({
         processing_status: 'QUEUED' as MagazineProcessingStatus,
@@ -359,8 +303,23 @@ export async function retryMagazineProcessingAction(id: string, token?: string):
       })
       .eq('id', id);
 
-    // Run processing pipeline
-    const processResult = await processMagazinePdf(id, { requestingUserId: profile.id });
+    try {
+      await (supabase.from('pdf_processing_jobs') as any).upsert({
+        magazine_id: id,
+        status: 'QUEUED',
+        available_at: new Date().toISOString(),
+        attempts: 0,
+      }, { onConflict: 'magazine_id' });
+    } catch (jobErr) {
+      console.warn('[Retry] Non-fatal job queue note:', jobErr);
+    }
+
+    // Run first chunk of processing pipeline (resumes from first missing page)
+    const processResult = await processMagazinePdf(id, { requestingUserId: profile.id, maxPagesPerRun: 4 });
+
+    if (processResult.success && !processResult.completed && (processResult.remainingPages || 0) > 0) {
+      dispatchWorkerContinuation(id);
+    }
 
     revalidatePath('/admin/dashboard');
     revalidatePath('/admin/magazines');

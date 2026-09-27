@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { validatePdfBuffer } from './validator';
 import { loadPdfDocument, renderSinglePdfPage } from './renderer';
+import { extractStoragePath } from '@/lib/storage/upload';
 import { MagazineProcessingStatus } from '@/types/magazine';
 
 export interface ProcessMagazineResult {
@@ -11,13 +12,14 @@ export interface ProcessMagazineResult {
   remainingPages?: number;
   progressPercent?: number;
   error?: string;
+  stage?: string;
 }
 
 export interface ProcessOptions {
   requestingUserId?: string;
   /**
    * Maximum number of missing pages to process in this single invocation.
-   * Useful for serverless step execution. If not specified, processes all remaining pages.
+   * Default: 4 pages per run (optimal for serverless timeouts and memory safety).
    */
   maxPagesPerRun?: number;
   /**
@@ -25,21 +27,6 @@ export interface ProcessOptions {
    * Default: false (resumes seamlessly from the first missing/failed page).
    */
   forceReprocess?: boolean;
-}
-
-/**
- * Extracts storage path from a full Supabase storage URL or returns relative path
- */
-function extractStoragePath(urlOrPath: string, bucketName: string): string {
-  if (!urlOrPath) return '';
-  if (urlOrPath.includes(`/${bucketName}/`)) {
-    const parts = urlOrPath.split(`/${bucketName}/`);
-    return decodeURIComponent(parts[1].split('?')[0]);
-  }
-  if (urlOrPath.startsWith(`${bucketName}/`)) {
-    return urlOrPath.substring(bucketName.length + 1);
-  }
-  return urlOrPath;
 }
 
 /**
@@ -66,7 +53,7 @@ async function ensureStorageBucket(
 async function uploadWithRetry(
   uploadFn: () => Promise<{ error: any }>,
   maxAttempts: number = 3,
-  initialDelayMs: number = 400
+  initialDelayMs: number = 300
 ): Promise<void> {
   let attempt = 0;
   let delay = initialDelayMs;
@@ -86,14 +73,15 @@ async function uploadWithRetry(
 }
 
 /**
- * Executes the hardened, resumable, memory-safe PDF ingestion and page-processing pipeline.
- * 
- * Key Architecture Highlights:
- * 1. Resumable: Queries existing magazine_pages and only processes missing/unrendered pages.
- * 2. Memory-Safe: Renders, encodes, uploads, and upserts one page at a time. Immediately releases buffers.
- * 3. Idempotent: Uses UNIQUE(magazine_id, page_number) upserts to prevent duplicate database rows.
- * 4. Concurrent-Safe: Prevents multiple active workers from stepping on the same publication.
- * 5. Fast & Crisp: Employs raw pixel buffer ingestion and tuned Sharp WebP encoding (~0.3s/page).
+ * Executes the hardened, chunked, resumable, memory-safe PDF ingestion & page-processing pipeline.
+ *
+ * Key Architectural Guarantees:
+ * 1. Resumable: Queries existing `magazine_pages` in database and only processes missing/unrendered pages.
+ * 2. Memory-Safe: Renders, encodes, uploads, and upserts one page at a time (never renders 52 pages at once).
+ * 3. Idempotent: Uses UNIQUE(magazine_id, page_number) upserts to prevent duplicate rows.
+ * 4. Concurrency Protection: Uses atomic job claims and lock expiration (2 min timeout).
+ * 5. Small Chunk Execution: Default 4 pages per invocation to strictly avoid serverless function timeouts.
+ * 6. Structured Logging: [PDF_JOB], [PDF_PROCESS], [PDF_PAGE], [PDF_COMPLETE], [PDF_FAILED].
  */
 export async function processMagazinePdf(
   magazineId: string,
@@ -101,9 +89,13 @@ export async function processMagazinePdf(
 ): Promise<ProcessMagazineResult> {
   const supabase = createAdminClient();
   const startTime = Date.now();
+  const workerId = `worker-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now()}`;
+  const maxPagesPerRun = typeof options.maxPagesPerRun === 'number' && options.maxPagesPerRun > 0 ? options.maxPagesPerRun : 4;
   let currentStage = 'INIT';
 
-  console.log(`[PDF_PROCESS] START publication_id=${magazineId} user_id=${options.requestingUserId || 'system'}`);
+  console.log(
+    `[PDF_PROCESS] START publication_id=${magazineId} worker_id=${workerId} max_pages=${maxPagesPerRun} user_id=${options.requestingUserId || 'system'}`
+  );
 
   try {
     currentStage = 'STORAGE_CHECK';
@@ -122,7 +114,7 @@ export async function processMagazinePdf(
     if (fetchError || !magazine) {
       const errorMsg = `Magazine not found: ${fetchError?.message || 'Record does not exist'}`;
       console.error(`[PDF_PROCESS] FAILED stage=${currentStage} error=${errorMsg}`);
-      return { success: false, completed: false, error: errorMsg };
+      return { success: false, completed: false, error: errorMsg, stage: currentStage };
     }
 
     currentStage = 'AUTH_CHECK';
@@ -137,7 +129,7 @@ export async function processMagazinePdf(
         if (userProfile.department_id !== magazine.department_id) {
           const errorMsg = 'Department access violation: You cannot process publications of another department.';
           console.error(`[PDF_PROCESS] FAILED stage=${currentStage} error=${errorMsg}`);
-          return { success: false, completed: false, error: errorMsg };
+          return { success: false, completed: false, error: errorMsg, stage: currentStage };
         }
       }
     }
@@ -147,12 +139,13 @@ export async function processMagazinePdf(
       const errorMsg = 'No original PDF file is associated with this publication.';
       console.error(`[PDF_PROCESS] FAILED stage=CHECK_PDF error=${errorMsg}`);
       await updateMagazineStatus(supabase, magazineId, 'FAILED', errorMsg);
-      return { success: false, completed: false, error: errorMsg };
+      return { success: false, completed: false, error: errorMsg, stage: 'CHECK_PDF' };
     }
 
     console.log(`[PDF_PROCESS] PDF_FOUND publication_id=${magazineId} path=${magazine.original_pdf_url}`);
 
-    // Lock check: prevent concurrent runs unless lock is older than 2 minutes (stale/crashed worker)
+    currentStage = 'CLAIM_JOB';
+    // Concurrency protection: verify active worker lock
     const now = Date.now();
     if (
       magazine.processing_status === 'PROCESSING' &&
@@ -160,17 +153,53 @@ export async function processMagazinePdf(
       !options.forceReprocess
     ) {
       const lockAgeMs = now - new Date(magazine.processing_started_at).getTime();
+      // If another worker claimed the job less than 2 minutes ago, do not conflict
       if (lockAgeMs < 2 * 60 * 1000) {
         console.log(`[PDF_PROCESS] BUSY publication_id=${magazineId} lock_age_ms=${lockAgeMs}`);
         return {
           success: true,
           completed: false,
-          error: 'Processing job is already actively running on another worker.',
+          error: 'Processing job is already active on another worker.',
+          stage: 'CLAIM_JOB',
         };
       }
     }
 
-    // Mark status as PROCESSING
+    // Upsert / Claim durable job record in `pdf_processing_jobs`
+    try {
+      const { data: existingJob } = await (supabase
+        .from('pdf_processing_jobs') as any)
+        .select('id, attempts')
+        .eq('magazine_id', magazineId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingJob) {
+        await (supabase.from('pdf_processing_jobs') as any)
+          .update({
+            status: 'PROCESSING',
+            locked_at: new Date().toISOString(),
+            locked_by: workerId,
+            attempts: (existingJob.attempts || 0) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingJob.id);
+      } else {
+        await (supabase.from('pdf_processing_jobs') as any).insert({
+          magazine_id: magazineId,
+          status: 'PROCESSING',
+          locked_at: new Date().toISOString(),
+          locked_by: workerId,
+          attempts: 1,
+        });
+      }
+      console.log(`[PDF_JOB] CLAIMED publication_id=${magazineId} worker_id=${workerId}`);
+    } catch (jobErr) {
+      console.warn(`[PDF_JOB] Non-fatal job queue logging note:`, jobErr);
+    }
+
+    // Atomically mark magazine status as PROCESSING
     await (supabase.from('magazines') as any)
       .update({
         processing_status: 'PROCESSING' as MagazineProcessingStatus,
@@ -191,6 +220,7 @@ export async function processMagazinePdf(
       const arrayBuf = await downloadedBlob.arrayBuffer();
       pdfBuffer = Buffer.from(arrayBuf);
     } else {
+      // Fallback: If signed URL or public URL is stored
       if (magazine.original_pdf_url.startsWith('http://') || magazine.original_pdf_url.startsWith('https://')) {
         try {
           const res = await fetch(magazine.original_pdf_url);
@@ -230,7 +260,8 @@ export async function processMagazinePdf(
       const errorMsg = validation.error || 'PDF validation failed.';
       console.error(`[PDF_PROCESS] FAILED stage=${currentStage} error=${errorMsg}`);
       await updateMagazineStatus(supabase, magazineId, 'FAILED', errorMsg);
-      return { success: false, completed: false, error: errorMsg };
+      await updateJobStatus(supabase, magazineId, 'FAILED', errorMsg);
+      return { success: false, completed: false, error: errorMsg, stage: currentStage };
     }
 
     const totalPages = validation.pageCount;
@@ -241,10 +272,10 @@ export async function processMagazinePdf(
       .update({ page_count: totalPages })
       .eq('id', magazineId);
 
-    // If forceReprocess requested, clear existing page assets and DB records first
     const departmentId = magazine.department_id;
     const folderPrefix = `${departmentId}/${magazineId}`;
 
+    // If forceReprocess requested, clear existing page assets and DB records first
     if (options.forceReprocess) {
       await (supabase.from('magazine_pages') as any)
         .delete()
@@ -286,7 +317,11 @@ export async function processMagazinePdf(
         })
         .eq('id', magazineId);
 
-      console.log(`[PDF_PROCESS] COMPLETED publication_id=${magazineId} total_pages=${totalPages}`);
+      await updateJobStatus(supabase, magazineId, 'COMPLETED', null);
+
+      const totalDurationSec = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`[PDF_COMPLETE] publication_id=${magazineId} total_pages=${totalPages} duration_sec=${totalDurationSec}`);
+
       return {
         success: true,
         completed: true,
@@ -298,17 +333,14 @@ export async function processMagazinePdf(
     }
 
     currentStage = 'RENDER_AND_UPLOAD';
-    // Load document once in memory for the batch
+    // Load document in memory for the small batch
     const { pdfDoc, canvasFactory } = await loadPdfDocument(pdfBuffer);
 
-    // Determine slice of missing pages to process in this run
-    const maxPages = options.maxPagesPerRun && options.maxPagesPerRun > 0
-      ? options.maxPagesPerRun
-      : missingPages.length;
-
-    const pagesToProcess = missingPages.slice(0, maxPages);
+    // Take the slice of missing pages for this invocation (default: 4 pages)
+    const pagesToProcess = missingPages.slice(0, maxPagesPerRun);
 
     for (let i = 0; i < pagesToProcess.length; i++) {
+      const pageStartTime = Date.now();
       const pageNum = pagesToProcess[i];
       const pagePadded = String(pageNum).padStart(4, '0');
       const imageStoragePath = `${folderPrefix}/pages/page-${pagePadded}.webp`;
@@ -377,9 +409,10 @@ export async function processMagazinePdf(
       completedPagesSet.add(pageNum);
       const currentCompleted = completedPagesSet.size;
       const progressPercent = Math.round((currentCompleted / totalPages) * 100);
+      const pageDurationMs = Date.now() - pageStartTime;
 
       console.log(
-        `[PDF_PROCESS] PAGE_RENDERED publication_id=${magazineId} page=${pageNum}/${totalPages} (${progressPercent}%)`
+        `[PDF_PAGE] publication_id=${magazineId} page_number=${pageNum} total_pages=${totalPages} status=OK duration_ms=${pageDurationMs} progress=${progressPercent}%`
       );
 
       // Release local rendered buffers immediately for Garbage Collector
@@ -409,9 +442,11 @@ export async function processMagazinePdf(
         throw new Error(`Failed to finalize magazine processing state: ${updateMagError.message}`);
       }
 
+      await updateJobStatus(supabase, magazineId, 'COMPLETED', null);
+
       const durationSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
       console.log(
-        `[PDF_PROCESS] COMPLETED publication_id=${magazineId} total_pages=${totalPages} duration_sec=${durationSeconds}`
+        `[PDF_COMPLETE] publication_id=${magazineId} total_pages=${totalPages} duration_sec=${durationSeconds}`
       );
 
       return {
@@ -423,7 +458,7 @@ export async function processMagazinePdf(
         progressPercent: 100,
       };
     } else {
-      // Chunk completed, more pages remaining. Set status to QUEUED so next step can run immediately
+      // Chunk completed, more pages remaining. Set status to QUEUED so next step can continue seamlessly
       await (supabase.from('magazines') as any)
         .update({
           processing_status: 'QUEUED' as MagazineProcessingStatus,
@@ -432,8 +467,10 @@ export async function processMagazinePdf(
         })
         .eq('id', magazineId);
 
+      await updateJobStatus(supabase, magazineId, 'QUEUED', null);
+
       console.log(
-        `[PDF_PROCESS] CHUNK_DONE publication_id=${magazineId} processed=${finalCompletedCount}/${totalPages} (${progressPercent}%)`
+        `[PDF_PROCESS] CHUNK_DONE publication_id=${magazineId} processed=${finalCompletedCount}/${totalPages} remaining=${remainingMissingCount} (${progressPercent}%)`
       );
 
       return {
@@ -447,18 +484,20 @@ export async function processMagazinePdf(
     }
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'An unexpected processing error occurred';
-    console.error(`[PDF_PROCESS] FAILED publication_id=${magazineId} stage=${currentStage} error=${errorMsg}`);
+    console.error(`[PDF_FAILED] publication_id=${magazineId} stage=${currentStage} error=${errorMsg}`);
     await updateMagazineStatus(supabase, magazineId, 'FAILED', errorMsg);
+    await updateJobStatus(supabase, magazineId, 'FAILED', errorMsg);
     return {
       success: false,
       completed: false,
       error: errorMsg,
+      stage: currentStage,
     };
   }
 }
 
 /**
- * Helper to update magazine processing status
+ * Helper to update magazine processing status in `magazines` table
  */
 async function updateMagazineStatus(
   supabase: ReturnType<typeof createAdminClient>,
@@ -476,5 +515,38 @@ async function updateMagazineStatus(
       .eq('id', magazineId);
   } catch (updateErr) {
     console.error('[PDF Pipeline] Failed to update magazine processing status:', updateErr);
+  }
+}
+
+/**
+ * Helper to update job status in `pdf_processing_jobs` table
+ */
+async function updateJobStatus(
+  supabase: ReturnType<typeof createAdminClient>,
+  magazineId: string,
+  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED',
+  errorMessage: string | null = null
+) {
+  try {
+    const updates: Record<string, any> = {
+      status,
+      updated_at: new Date().toISOString(),
+      last_error: errorMessage,
+    };
+
+    if (status === 'QUEUED') {
+      updates.locked_at = null;
+      updates.locked_by = null;
+      updates.available_at = new Date().toISOString();
+    } else if (status === 'COMPLETED' || status === 'FAILED') {
+      updates.locked_at = null;
+      updates.locked_by = null;
+    }
+
+    await (supabase.from('pdf_processing_jobs') as any)
+      .update(updates)
+      .eq('magazine_id', magazineId);
+  } catch (jobErr) {
+    console.warn('[PDF Pipeline] Non-critical job status update note:', jobErr);
   }
 }

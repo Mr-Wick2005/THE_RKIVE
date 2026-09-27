@@ -129,6 +129,21 @@ CREATE TABLE IF NOT EXISTS public.magazine_status_history (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 6d. PDF PROCESSING JOBS TABLE (DURABLE ASYNC QUEUE)
+CREATE TABLE IF NOT EXISTS public.pdf_processing_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    locked_at TIMESTAMPTZ,
+    locked_by TEXT,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- 7. INDEXES FOR HIGH-PERFORMANCE QUERIES
 CREATE INDEX IF NOT EXISTS idx_departments_slug ON public.departments(slug);
 CREATE INDEX IF NOT EXISTS idx_departments_is_active ON public.departments(is_active);
@@ -150,6 +165,9 @@ CREATE INDEX IF NOT EXISTS idx_magazine_pages_page_number ON public.magazine_pag
 
 CREATE INDEX IF NOT EXISTS idx_magazine_status_history_mag_id ON public.magazine_status_history(magazine_id);
 CREATE INDEX IF NOT EXISTS idx_magazine_status_history_created_at ON public.magazine_status_history(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_pdf_processing_jobs_queue ON public.pdf_processing_jobs(status, available_at);
+CREATE INDEX IF NOT EXISTS idx_pdf_processing_jobs_magazine_id ON public.pdf_processing_jobs(magazine_id);
 
 -- 8. AUTOMATIC updated_at TIMESTAMP FUNCTION & TRIGGERS
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
@@ -210,6 +228,67 @@ AS $$
         SELECT 1 FROM public.profiles
         WHERE id = user_id AND role = 'SUPER_ADMIN' AND is_active = true
     );
+$$;
+
+-- 9b. ATOMIC JOB CLAIMING PROCEDURES
+CREATE OR REPLACE FUNCTION public.claim_next_pdf_job(p_worker_id TEXT)
+RETURNS SETOF public.pdf_processing_jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RETURN QUERY
+    UPDATE public.pdf_processing_jobs
+    SET status = 'PROCESSING',
+        locked_at = now(),
+        locked_by = p_worker_id,
+        attempts = attempts + 1,
+        updated_at = now()
+    WHERE id = (
+        SELECT id FROM public.pdf_processing_jobs
+        WHERE (
+            status = 'QUEUED' 
+            OR (status = 'PROCESSING' AND locked_at < now() - INTERVAL '2 minutes')
+        )
+        AND available_at <= now()
+        AND attempts < max_attempts
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+    )
+    RETURNING *;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.claim_magazine_pdf_job(p_magazine_id UUID, p_worker_id TEXT)
+RETURNS SETOF public.pdf_processing_jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RETURN QUERY
+    UPDATE public.pdf_processing_jobs
+    SET status = 'PROCESSING',
+        locked_at = now(),
+        locked_by = p_worker_id,
+        attempts = attempts + 1,
+        updated_at = now()
+    WHERE id = (
+        SELECT id FROM public.pdf_processing_jobs
+        WHERE magazine_id = p_magazine_id
+          AND (
+            status = 'QUEUED'
+            OR (status = 'PROCESSING' AND locked_at < now() - INTERVAL '2 minutes')
+          )
+          AND attempts < max_attempts
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+    )
+    RETURNING *;
+END;
 $$;
 
 -- 10. AUTH PROFILE CREATION TRIGGER
@@ -588,6 +667,55 @@ CREATE TRIGGER set_magazine_pages_updated_at
     BEFORE UPDATE ON public.magazine_pages
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
+
+-- ------------------------------------------------------------------------------
+-- PDF_PROCESSING_JOBS POLICIES
+-- ------------------------------------------------------------------------------
+
+ALTER TABLE public.pdf_processing_jobs ENABLE ROW LEVEL SECURITY;
+
+DROP TRIGGER IF EXISTS set_pdf_processing_jobs_updated_at ON public.pdf_processing_jobs;
+CREATE TRIGGER set_pdf_processing_jobs_updated_at
+    BEFORE UPDATE ON public.pdf_processing_jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+-- Super Admins can manage all pdf jobs
+DROP POLICY IF EXISTS "Super Admins can manage all pdf jobs" ON public.pdf_processing_jobs;
+CREATE POLICY "Super Admins can manage all pdf jobs"
+    ON public.pdf_processing_jobs
+    FOR ALL
+    TO authenticated
+    USING (public.is_super_admin(auth.uid()))
+    WITH CHECK (public.is_super_admin(auth.uid()));
+
+-- Dept Admins can view own department pdf jobs
+DROP POLICY IF EXISTS "Dept Admins can view own department pdf jobs" ON public.pdf_processing_jobs;
+CREATE POLICY "Dept Admins can view own department pdf jobs"
+    ON public.pdf_processing_jobs
+    FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.magazines m
+            WHERE m.id = pdf_processing_jobs.magazine_id
+            AND m.department_id = public.get_user_department_id(auth.uid())
+        )
+    );
+
+-- Dept Admins can insert own department pdf jobs
+DROP POLICY IF EXISTS "Dept Admins can insert own department pdf jobs" ON public.pdf_processing_jobs;
+CREATE POLICY "Dept Admins can insert own department pdf jobs"
+    ON public.pdf_processing_jobs
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.magazines m
+            WHERE m.id = pdf_processing_jobs.magazine_id
+            AND m.department_id = public.get_user_department_id(auth.uid())
+        )
+    );
 
 -- ==============================================================================
 -- 12. STORAGE BUCKETS & POLICIES SETUP

@@ -87,6 +87,21 @@ export function getCoverStoragePath(
 }
 
 /**
+ * Extracts relative storage path from a full Supabase storage URL or returns relative path
+ */
+export function extractStoragePath(urlOrPath: string, bucketName: string): string {
+  if (!urlOrPath) return '';
+  if (urlOrPath.includes(`/${bucketName}/`)) {
+    const parts = urlOrPath.split(`/${bucketName}/`);
+    return decodeURIComponent(parts[1].split('?')[0]);
+  }
+  if (urlOrPath.startsWith(`${bucketName}/`)) {
+    return urlOrPath.substring(bucketName.length + 1);
+  }
+  return urlOrPath;
+}
+
+/**
  * Builds structured department-scoped PDF path:
  * magazine-pdfs/{department_id}/{magazine_id}/original-{timestamp}.pdf
  */

@@ -295,6 +295,55 @@ export interface Database {
           }
         ];
       };
+      pdf_processing_jobs: {
+        Row: {
+          id: string;
+          magazine_id: string;
+          status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+          attempts: number;
+          max_attempts: number;
+          available_at: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          magazine_id: string;
+          status?: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+          attempts?: number;
+          max_attempts?: number;
+          available_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          last_error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          magazine_id?: string;
+          status?: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+          attempts?: number;
+          max_attempts?: number;
+          available_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          last_error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pdf_processing_jobs_magazine_id_fkey";
+            columns: ["magazine_id"];
+            referencedRelation: "magazines";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {};
     Functions: {

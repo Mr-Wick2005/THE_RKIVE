@@ -13,6 +13,10 @@ export type MagazinePageUpdate = Database['public']['Tables']['magazine_pages'][
 export type MagazineStatusHistory = Database['public']['Tables']['magazine_status_history']['Row'];
 export type MagazineStatusHistoryInsert = Database['public']['Tables']['magazine_status_history']['Insert'];
 
+export type PdfProcessingJob = Database['public']['Tables']['pdf_processing_jobs']['Row'];
+export type PdfProcessingJobInsert = Database['public']['Tables']['pdf_processing_jobs']['Insert'];
+export type PdfProcessingJobUpdate = Database['public']['Tables']['pdf_processing_jobs']['Update'];
+
 export type { MagazineStatus, MagazineProcessingStatus };
 
 export interface MagazineStatusHistoryWithProfile extends MagazineStatusHistory {

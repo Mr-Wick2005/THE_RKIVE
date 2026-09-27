@@ -103,6 +103,18 @@ export function PublicationForm({
     department: department || undefined,
   };
 
+  // Passive polling: Refresh UI status if publication is currently processing in background
+  React.useEffect(() => {
+    if (!isEditing || !initialData) return;
+    if (initialData.processing_status !== 'PROCESSING' && initialData.processing_status !== 'QUEUED') return;
+
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isEditing, initialData?.processing_status, router]);
+
   const handleRetryProcessing = async () => {
     if (!initialData?.id) return;
     setIsRetryingProcessing(true);
@@ -113,9 +125,16 @@ export function PublicationForm({
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      const result = await retryMagazineProcessingAction(initialData.id, session?.access_token);
+      const activeToken = session?.access_token;
+      if (!activeToken) {
+        setErrorMessage('Your session has expired. Please sign in again.');
+        setIsRetryingProcessing(false);
+        return;
+      }
+
+      const result = await retryMagazineProcessingAction(initialData.id, activeToken);
       if (result?.success) {
-        setSuccessMessage('PDF processing started. Document pages are being generated.');
+        setSuccessMessage('PDF processing resumed. Document pages are being rendered in chunks.');
         router.refresh();
       } else {
         setErrorMessage(result?.error || 'Failed to start PDF processing.');
@@ -166,7 +185,7 @@ export function PublicationForm({
 
       const activeToken = session?.access_token;
       if (!activeToken) {
-        setErrorMessage('Your administrative session has expired. Please sign in again.');
+        setErrorMessage('[AUTH_FAILED] Your administrative session has expired. Please sign in again.');
         setIsSavingDraft(false);
         setIsSubmittingReview(false);
         setShowConfirmModal(false);
@@ -175,7 +194,7 @@ export function PublicationForm({
 
       const targetDeptId = selectedDepartment?.id || (department?.id);
       if (!targetDeptId) {
-        setErrorMessage('Target academic department is missing.');
+        setErrorMessage('[METADATA_FAILED] Target academic department is missing.');
         setIsSavingDraft(false);
         setIsSubmittingReview(false);
         setShowConfirmModal(false);
@@ -183,12 +202,19 @@ export function PublicationForm({
       }
 
       const magazineId = initialData?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+      if (!magazineId) {
+        setErrorMessage('[METADATA_FAILED] Failed to generate publication ID.');
+        setIsSavingDraft(false);
+        setIsSubmittingReview(false);
+        setShowConfirmModal(false);
+        return;
+      }
 
       let directCoverUrl: string | null = null;
       let directPdfPath: string | null = null;
 
-      // 1. Direct cover upload using server-signed URL
-      if (coverFile && magazineId && targetDeptId) {
+      // 1. Direct Cover Upload: Browser -> Supabase Storage directly (never through Vercel body)
+      if (coverFile) {
         try {
           const uploadRes = await fetch('/api/admin/data', {
             method: 'POST',
@@ -204,26 +230,42 @@ export function PublicationForm({
               fileName: coverFile.name,
             }),
           });
-          const uploadInfo = await uploadRes.json();
-          if (uploadInfo.signedUrl) {
-            const putRes = await fetch(uploadInfo.signedUrl, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': coverFile.type || 'image/jpeg',
-              },
-              body: coverFile,
-            });
-            if (putRes.ok) {
-              directCoverUrl = uploadInfo.publicUrl;
-            }
+
+          if (!uploadRes.ok) {
+            const errData = await uploadRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Server returned HTTP ${uploadRes.status}`);
           }
-        } catch (uploadErr) {
-          console.warn('Direct cover upload warning, falling back to server action:', uploadErr);
+
+          const uploadInfo = await uploadRes.json();
+          if (!uploadInfo.signedUrl) {
+            throw new Error('No signed upload URL returned by authorization server.');
+          }
+
+          const putRes = await fetch(uploadInfo.signedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': coverFile.type || 'image/jpeg',
+            },
+            body: coverFile,
+          });
+
+          if (!putRes.ok) {
+            throw new Error(`Direct storage upload failed with HTTP ${putRes.status}`);
+          }
+
+          directCoverUrl = uploadInfo.publicUrl;
+        } catch (coverErr: any) {
+          console.error('[COVER_UPLOAD_FAILED]', coverErr);
+          setErrorMessage(`[COVER_UPLOAD_FAILED] Failed to upload cover image directly to storage: ${coverErr.message}`);
+          setIsSavingDraft(false);
+          setIsSubmittingReview(false);
+          setShowConfirmModal(false);
+          return;
         }
       }
 
-      // 2. Direct PDF upload using server-signed URL to bypass body limits and private bucket RLS
-      if (pdfFile && magazineId && targetDeptId) {
+      // 2. Direct PDF Upload: Browser -> Supabase Storage directly (never through Vercel body)
+      if (pdfFile) {
         try {
           const uploadRes = await fetch('/api/admin/data', {
             method: 'POST',
@@ -238,29 +280,44 @@ export function PublicationForm({
               magazineId,
             }),
           });
-          const uploadInfo = await uploadRes.json();
-          if (uploadInfo.signedUrl) {
-            const putRes = await fetch(uploadInfo.signedUrl, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/pdf',
-              },
-              body: pdfFile,
-            });
-            if (putRes.ok) {
-              directPdfPath = uploadInfo.path;
-            }
+
+          if (!uploadRes.ok) {
+            const errData = await uploadRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Server returned HTTP ${uploadRes.status}`);
           }
-        } catch (uploadErr) {
-          console.warn('Direct PDF upload warning, falling back to server action:', uploadErr);
+
+          const uploadInfo = await uploadRes.json();
+          if (!uploadInfo.signedUrl) {
+            throw new Error('No signed upload URL returned by authorization server.');
+          }
+
+          const putRes = await fetch(uploadInfo.signedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/pdf',
+            },
+            body: pdfFile,
+          });
+
+          if (!putRes.ok) {
+            throw new Error(`Direct storage upload failed with HTTP ${putRes.status}`);
+          }
+
+          directPdfPath = uploadInfo.path;
+        } catch (pdfErr: any) {
+          console.error('[PDF_UPLOAD_FAILED]', pdfErr);
+          setErrorMessage(`[PDF_UPLOAD_FAILED] Failed to upload PDF directly to storage: ${pdfErr.message}. The document must upload directly without passing through Vercel.`);
+          setIsSavingDraft(false);
+          setIsSubmittingReview(false);
+          setShowConfirmModal(false);
+          return;
         }
       }
 
+      // 3. Save publication metadata via Server Action (no binary bodies attached)
       const formData = new FormData();
       formData.set('access_token', activeToken);
-      if (magazineId) {
-        formData.set('id', magazineId);
-      }
+      formData.set('id', magazineId);
       formData.set('title', title);
       formData.set('subtitle', subtitle);
       formData.set('description', description);
@@ -274,14 +331,10 @@ export function PublicationForm({
 
       if (directCoverUrl) {
         formData.set('cover_image_url', directCoverUrl);
-      } else if (coverFile) {
-        formData.set('cover_file', coverFile);
       }
 
       if (directPdfPath) {
         formData.set('original_pdf_url', directPdfPath);
-      } else if (pdfFile) {
-        formData.set('pdf_file', pdfFile);
       }
 
       const result = isEditing && initialData
@@ -289,11 +342,29 @@ export function PublicationForm({
         : await createMagazineAction(formData);
 
       if (!result || !result.success) {
-        setErrorMessage(result?.error || 'Operation failed. Please check the publication details and try again.');
+        setErrorMessage(result?.error || '[PUBLICATION_CREATION_FAILED] Operation failed. Please check the publication details and try again.');
         setIsSavingDraft(false);
         setIsSubmittingReview(false);
         setShowConfirmModal(false);
         return;
+      }
+
+      // 4. Trigger first chunk processing asynchronously
+      if (directPdfPath) {
+        fetch('/api/admin/data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            action: 'process-step',
+            id: result.magazineId || magazineId,
+            maxPages: 4,
+          }),
+        }).catch((procErr) => {
+          console.warn('[PDF_PROCESS] Initial trigger note:', procErr);
+        });
       }
 
       setSuccessMessage(
@@ -307,7 +378,7 @@ export function PublicationForm({
       setTimeout(() => {
         router.push('/admin/magazines');
         router.refresh();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       console.error('Error submitting form:', err);
       setErrorMessage(err.message || 'An unexpected error occurred.');
