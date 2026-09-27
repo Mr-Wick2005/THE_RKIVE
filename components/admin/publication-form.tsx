@@ -314,39 +314,75 @@ export function PublicationForm({
         }
       }
 
-      // 3. Save publication metadata via Server Action (no binary bodies attached)
-      const formData = new FormData();
-      formData.set('access_token', activeToken);
-      formData.set('id', magazineId);
-      formData.set('title', title);
-      formData.set('subtitle', subtitle);
-      formData.set('description', description);
-      formData.set('academic_year', academicYear);
-      formData.set('edition', edition);
-      formData.set('volume', volume);
-      formData.set('issue', issue);
-      formData.set('page_count', pageCount);
-      formData.set('submit_now', submitNow ? 'true' : 'false');
-      formData.set('department_id', targetDeptId);
+      // 3. Save publication metadata (no binary bodies attached)
+      let resultMagazineId = magazineId;
+      try {
+        const saveRes = await fetch('/api/admin/data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            action: isEditing && initialData ? 'update-publication' : 'create-publication',
+            id: magazineId,
+            title: title.trim(),
+            subtitle: subtitle.trim() || undefined,
+            description: description.trim() || undefined,
+            academic_year: academicYear.trim(),
+            edition: edition.trim() || undefined,
+            volume: volume.trim() || undefined,
+            issue: issue.trim() || undefined,
+            department_id: targetDeptId,
+            cover_image_url: directCoverUrl || undefined,
+            original_pdf_url: directPdfPath || undefined,
+            submit_now: submitNow,
+          }),
+        });
 
-      if (directCoverUrl) {
-        formData.set('cover_image_url', directCoverUrl);
-      }
+        const saveJson = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok || !saveJson.success) {
+          throw new Error(saveJson.error || `Server responded with HTTP ${saveRes.status}`);
+        }
 
-      if (directPdfPath) {
-        formData.set('original_pdf_url', directPdfPath);
-      }
+        if (saveJson.magazineId) {
+          resultMagazineId = saveJson.magazineId;
+        }
+      } catch (saveErr: any) {
+        // Fallback to Server Action if endpoint fails
+        console.warn('[Action] /api/admin/data save note, trying fallback:', saveErr);
+        const formData = new FormData();
+        formData.set('access_token', activeToken);
+        formData.set('id', magazineId);
+        formData.set('title', title);
+        formData.set('subtitle', subtitle);
+        formData.set('description', description);
+        formData.set('academic_year', academicYear);
+        formData.set('edition', edition);
+        formData.set('volume', volume);
+        formData.set('issue', issue);
+        formData.set('page_count', pageCount);
+        formData.set('submit_now', submitNow ? 'true' : 'false');
+        formData.set('department_id', targetDeptId);
 
-      const result = isEditing && initialData
-        ? await updateMagazineAction(initialData.id, formData)
-        : await createMagazineAction(formData);
+        if (directCoverUrl) formData.set('cover_image_url', directCoverUrl);
+        if (directPdfPath) formData.set('original_pdf_url', directPdfPath);
 
-      if (!result || !result.success) {
-        setErrorMessage(result?.error || '[PUBLICATION_CREATION_FAILED] Operation failed. Please check the publication details and try again.');
-        setIsSavingDraft(false);
-        setIsSubmittingReview(false);
-        setShowConfirmModal(false);
-        return;
+        const fallbackResult = isEditing && initialData
+          ? await updateMagazineAction(initialData.id, formData)
+          : await createMagazineAction(formData);
+
+        if (!fallbackResult || !fallbackResult.success) {
+          setErrorMessage(fallbackResult?.error || saveErr.message || 'Operation failed. Please check the publication details and try again.');
+          setIsSavingDraft(false);
+          setIsSubmittingReview(false);
+          setShowConfirmModal(false);
+          return;
+        }
+
+        if (fallbackResult.magazineId) {
+          resultMagazineId = fallbackResult.magazineId;
+        }
       }
 
       // 4. Trigger first chunk processing asynchronously
@@ -359,7 +395,7 @@ export function PublicationForm({
           },
           body: JSON.stringify({
             action: 'process-step',
-            id: result.magazineId || magazineId,
+            id: resultMagazineId || magazineId,
             maxPages: 4,
           }),
         }).catch((procErr) => {

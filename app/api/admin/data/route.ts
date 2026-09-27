@@ -8,11 +8,14 @@ import {
   getMyDepartmentMagazineById,
   getReviewQueueMagazines,
   getMagazineForReview,
+  generateUniqueMagazineSlug,
+  recordStatusTransition,
 } from '@/lib/magazines/admin';
 import { getEditorialUsers, getEditorialUserStats } from '@/lib/auth/bootstrap';
-import { getCoverStoragePath, getPdfStoragePath } from '@/lib/storage/upload';
+import { getCoverStoragePath, getPdfStoragePath, deleteMagazineStorageAssets } from '@/lib/storage/upload';
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
+import { MagazineStatus } from '@/types/magazine';
 
 export const dynamic = 'force-dynamic';
 
@@ -251,6 +254,266 @@ export async function POST(request: Request) {
           dispatchWorkerContinuation(id);
         }
         return NextResponse.json(processResult);
+      }
+
+      case 'create-publication': {
+        const {
+          id: customId,
+          title,
+          subtitle,
+          description,
+          academic_year,
+          edition,
+          volume,
+          issue,
+          department_id: reqDeptId,
+          cover_image_url,
+          original_pdf_url,
+        } = body;
+
+        const effectiveDeptId = profile.role === 'SUPER_ADMIN'
+          ? reqDeptId || profile.department_id
+          : profile.department_id;
+
+        if (!effectiveDeptId) {
+          return NextResponse.json({ error: 'Department assignment is missing from your profile.' }, { status: 400 });
+        }
+
+        const titleTrimmed = title?.trim();
+        if (!titleTrimmed) {
+          return NextResponse.json({ error: 'Publication title is required.' }, { status: 400 });
+        }
+
+        const academicYearTrimmed = academic_year?.trim();
+        if (!academicYearTrimmed) {
+          return NextResponse.json({ error: 'Academic year is required.' }, { status: 400 });
+        }
+
+        const supabase = createAdminClient();
+        const slug = await generateUniqueMagazineSlug(titleTrimmed);
+
+        const insertPayload: Record<string, any> = {
+          title: titleTrimmed,
+          subtitle: subtitle?.trim() || null,
+          description: description?.trim() || null,
+          academic_year: academicYearTrimmed,
+          edition: edition?.trim() || null,
+          volume: volume?.trim() || null,
+          issue: issue?.trim() || null,
+          page_count: 0,
+          slug,
+          department_id: effectiveDeptId,
+          created_by: profile.id,
+          status: 'DRAFT',
+          processing_status: (original_pdf_url ? 'QUEUED' : 'NOT_STARTED'),
+          cover_image_url: cover_image_url?.trim() || null,
+          original_pdf_url: original_pdf_url?.trim() || null,
+        };
+
+        if (customId) {
+          insertPayload.id = customId;
+        }
+
+        const { data: magazine, error: insertError } = await (supabase
+          .from('magazines') as any)
+          .insert(insertPayload)
+          .select('id, slug')
+          .single();
+
+        if (insertError || !magazine) {
+          console.error('[Action] Error inserting magazine:', insertError);
+          return NextResponse.json({ error: insertError?.message || 'Failed to create publication record.' }, { status: 500 });
+        }
+
+        const magazineId = magazine.id;
+
+        if (original_pdf_url) {
+          try {
+            await (supabase.from('pdf_processing_jobs') as any).upsert({
+              magazine_id: magazineId,
+              status: 'QUEUED',
+              available_at: new Date().toISOString(),
+              attempts: 0,
+            }, { onConflict: 'magazine_id' });
+
+            dispatchWorkerContinuation(magazineId);
+          } catch (jobErr) {
+            console.warn('[Action] Non-fatal job queue insert warning:', jobErr);
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          magazineId,
+          slug: magazine.slug,
+        });
+      }
+
+      case 'update-publication': {
+        const {
+          id: magId,
+          title,
+          subtitle,
+          description,
+          academic_year,
+          edition,
+          volume,
+          issue,
+          cover_image_url,
+          original_pdf_url,
+        } = body;
+
+        if (!magId) {
+          return NextResponse.json({ error: 'Missing publication ID.' }, { status: 400 });
+        }
+
+        const supabase = createAdminClient();
+        const { data: existing, error: fetchErr } = await (supabase
+          .from('magazines') as any)
+          .select('id, department_id, status, original_pdf_url')
+          .eq('id', magId)
+          .single();
+
+        if (fetchErr || !existing) {
+          return NextResponse.json({ error: 'Publication record not found.' }, { status: 404 });
+        }
+
+        if (profile.role !== 'SUPER_ADMIN' && existing.department_id !== profile.department_id) {
+          return NextResponse.json({ error: 'Forbidden: You can only edit your own department publications.' }, { status: 403 });
+        }
+
+        const titleTrimmed = title?.trim();
+        if (!titleTrimmed) {
+          return NextResponse.json({ error: 'Publication title is required.' }, { status: 400 });
+        }
+
+        const academicYearTrimmed = academic_year?.trim();
+        if (!academicYearTrimmed) {
+          return NextResponse.json({ error: 'Academic year is required.' }, { status: 400 });
+        }
+
+        const updates: Record<string, any> = {
+          title: titleTrimmed,
+          subtitle: subtitle?.trim() || null,
+          description: description?.trim() || null,
+          academic_year: academicYearTrimmed,
+          edition: edition?.trim() || null,
+          volume: volume?.trim() || null,
+          issue: issue?.trim() || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (cover_image_url) {
+          updates.cover_image_url = cover_image_url;
+        }
+
+        let newPdfUploaded = false;
+        if (original_pdf_url && original_pdf_url !== existing.original_pdf_url) {
+          updates.original_pdf_url = original_pdf_url;
+          updates.processing_status = 'QUEUED';
+          updates.processing_error = null;
+          newPdfUploaded = true;
+        }
+
+        const { error: updateError } = await (supabase
+          .from('magazines') as any)
+          .update(updates)
+          .eq('id', magId);
+
+        if (updateError) {
+          return NextResponse.json({ error: updateError.message || 'Failed to update publication.' }, { status: 500 });
+        }
+
+        if (newPdfUploaded) {
+          try {
+            await (supabase.from('pdf_processing_jobs') as any).upsert({
+              magazine_id: magId,
+              status: 'QUEUED',
+              available_at: new Date().toISOString(),
+              attempts: 0,
+            }, { onConflict: 'magazine_id' });
+
+            dispatchWorkerContinuation(magId);
+          } catch (jobErr) {
+            console.warn('[Action] Non-fatal job queue update warning:', jobErr);
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          magazineId: magId,
+        });
+      }
+
+      case 'submit-publication': {
+        if (!id) {
+          return NextResponse.json({ error: 'Missing publication ID.' }, { status: 400 });
+        }
+
+        const supabase = createAdminClient();
+        const { data: existing, error: fetchErr } = await (supabase
+          .from('magazines') as any)
+          .select('id, department_id, status, title, original_pdf_url, processing_status, page_count')
+          .eq('id', id)
+          .single();
+
+        if (fetchErr || !existing) {
+          return NextResponse.json({ error: 'Publication record not found.' }, { status: 404 });
+        }
+
+        if (profile.role !== 'SUPER_ADMIN' && existing.department_id !== profile.department_id) {
+          return NextResponse.json({ error: 'Forbidden: Department mismatch.' }, { status: 403 });
+        }
+
+        if (existing.processing_status !== 'COMPLETED') {
+          return NextResponse.json({ error: 'This publication must finish processing before it can be submitted for review.' }, { status: 400 });
+        }
+
+        const { error: updateError } = await (supabase
+          .from('magazines') as any)
+          .update({ status: 'SUBMITTED' })
+          .eq('id', id);
+
+        if (updateError) {
+          return NextResponse.json({ error: updateError.message || 'Failed to submit publication.' }, { status: 500 });
+        }
+
+        await recordStatusTransition(id, existing.status as MagazineStatus, 'SUBMITTED', profile.id, 'Submitted for college review');
+        return NextResponse.json({ success: true, magazineId: id });
+      }
+
+      case 'delete-publication': {
+        if (!id) {
+          return NextResponse.json({ error: 'Missing publication ID.' }, { status: 400 });
+        }
+
+        const supabase = createAdminClient();
+        const { data: existing, error: fetchErr } = await (supabase
+          .from('magazines') as any)
+          .select('id, department_id, status, title, slug')
+          .eq('id', id)
+          .single();
+
+        if (fetchErr || !existing) {
+          return NextResponse.json({ error: 'Publication record not found.' }, { status: 404 });
+        }
+
+        if (profile.role !== 'SUPER_ADMIN' && existing.department_id !== profile.department_id) {
+          return NextResponse.json({ error: 'Forbidden: Department mismatch.' }, { status: 403 });
+        }
+
+        await deleteMagazineStorageAssets(supabase, existing.department_id, existing.id);
+
+        const { error: deleteError } = await supabase
+          .from('magazines')
+          .delete()
+          .eq('id', id);
+
+        if (deleteError) {
+          return NextResponse.json({ error: deleteError.message || 'Failed to delete publication.' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
       }
 
       default:
