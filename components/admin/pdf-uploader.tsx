@@ -80,7 +80,7 @@ export function PdfUploader({
           Publication Document (Original PDF)
         </label>
         <span className="text-[10px] font-mono text-[#77736C]">
-          PDF format only (Max 100 MB)
+          PDF format only (Max 50 MB)
         </span>
       </div>
 
@@ -158,7 +158,7 @@ export function PdfUploader({
                 Click to browse or drag & drop publication PDF
               </p>
               <p className="text-[11px] text-[#77736C]">
-                Restricted college archive storage • Max 100 MB
+                Restricted college archive storage • Max 50 MB
               </p>
             </div>
           </div>

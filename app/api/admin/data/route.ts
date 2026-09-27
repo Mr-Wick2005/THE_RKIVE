@@ -190,7 +190,7 @@ export async function POST(request: Request) {
           const filePath = getPdfStoragePath(effectiveDeptId, magazineId);
           const { data: signData, error: signError } = await supabase.storage
             .from('magazine-pdfs')
-            .createSignedUploadUrl(filePath);
+            .createSignedUploadUrl(filePath, { upsert: true });
 
           if (signError || !signData) {
             console.error('[Storage] Error creating signed PDF upload URL:', signError);
@@ -206,7 +206,7 @@ export async function POST(request: Request) {
           const filePath = getCoverStoragePath(effectiveDeptId, magazineId, fileName || 'cover.jpg');
           const { data: signData, error: signError } = await supabase.storage
             .from('magazine-covers')
-            .createSignedUploadUrl(filePath);
+            .createSignedUploadUrl(filePath, { upsert: true });
 
           if (signError || !signData) {
             console.error('[Storage] Error creating signed cover upload URL:', signError);

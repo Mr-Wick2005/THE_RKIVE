@@ -250,7 +250,17 @@ export function PublicationForm({
           });
 
           if (!putRes.ok) {
-            throw new Error(`Direct storage upload failed with HTTP ${putRes.status}`);
+            let errorDetail = `Direct storage upload failed with HTTP ${putRes.status}`;
+            try {
+              const errText = await putRes.text();
+              const parsed = JSON.parse(errText);
+              if (parsed.message || parsed.error) {
+                errorDetail = `${parsed.message || parsed.error} (HTTP ${putRes.status})`;
+              }
+            } catch {
+              // fallback
+            }
+            throw new Error(errorDetail);
           }
 
           directCoverUrl = uploadInfo.publicUrl;
@@ -300,13 +310,29 @@ export function PublicationForm({
           });
 
           if (!putRes.ok) {
-            throw new Error(`Direct storage upload failed with HTTP ${putRes.status}`);
+            let errorDetail = `Direct storage upload failed with HTTP ${putRes.status}`;
+            try {
+              const errText = await putRes.text();
+              const parsed = JSON.parse(errText);
+              if (parsed.error === 'Payload too large' || parsed.statusCode === '413' || parsed.code === 'EntityTooLarge' || putRes.status === 400 || putRes.status === 413) {
+                const fileSizeMb = (pdfFile.size / (1024 * 1024)).toFixed(2);
+                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage 50 MB platform limit. Please compress or optimize the PDF to under 50 MB before uploading.`;
+              } else if (parsed.message || parsed.error) {
+                errorDetail = `${parsed.message || parsed.error} (HTTP ${putRes.status})`;
+              }
+            } catch {
+              if (pdfFile.size > 50 * 1024 * 1024) {
+                const fileSizeMb = (pdfFile.size / (1024 * 1024)).toFixed(2);
+                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage 50 MB platform limit. Please compress or optimize the PDF to under 50 MB before uploading.`;
+              }
+            }
+            throw new Error(errorDetail);
           }
 
           directPdfPath = uploadInfo.path;
         } catch (pdfErr: any) {
           console.error('[PDF_UPLOAD_FAILED]', pdfErr);
-          setErrorMessage(`[PDF_UPLOAD_FAILED] Failed to upload PDF directly to storage: ${pdfErr.message}. The document must upload directly without passing through Vercel.`);
+          setErrorMessage(`[PDF_UPLOAD_FAILED] ${pdfErr.message}`);
           setIsSavingDraft(false);
           setIsSubmittingReview(false);
           setShowConfirmModal(false);

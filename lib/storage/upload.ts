@@ -2,7 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 
 export const MAX_COVER_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-export const MAX_PDF_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB (Supabase Storage standard limit)
 
 export const ALLOWED_COVER_MIME_TYPES = [
   'image/jpeg',
@@ -62,10 +62,10 @@ export function validatePdfFile(file: File | { name?: string; type?: string; siz
   }
 
   if (file.size && file.size > MAX_PDF_SIZE_BYTES) {
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
     return {
       valid: false,
-      error: `PDF document size (${sizeMb} MB) exceeds the allowed 100 MB limit.`,
+      error: `PDF document size (${sizeMb} MB) exceeds the 50 MB limit enforced by Supabase Storage. Please compress your PDF before uploading.`,
     };
   }
 

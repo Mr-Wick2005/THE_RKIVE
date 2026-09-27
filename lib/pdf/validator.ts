@@ -8,7 +8,7 @@ export interface PdfValidationResult {
   author?: string;
 }
 
-export const MAX_PDF_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB (Supabase Storage limit)
 
 /**
  * Validates a PDF buffer by checking:
@@ -30,11 +30,11 @@ export async function validatePdfBuffer(
       };
     }
 
-    // 2. Maximum size check (100MB)
+    // 2. Maximum size check (50MB)
     if (buffer.length > MAX_PDF_SIZE_BYTES) {
       return {
         isValid: false,
-        error: 'This PDF exceeds the maximum allowed file size of 100 MB.',
+        error: 'This PDF exceeds the maximum allowed file size of 50 MB (Supabase Storage limit).',
         pageCount: 0,
       };
     }
