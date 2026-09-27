@@ -26,6 +26,15 @@ async function getPdfJs() {
   if (typeof (globalThis as any).Path2D === 'undefined') {
     (globalThis as any).Path2D = Path2D;
   }
+  if (typeof (globalThis as any).pdfjsWorker === 'undefined') {
+    try {
+      // @ts-ignore
+      const workerModule = await import('pdfjs-dist/legacy/build/pdf.worker.js');
+      (globalThis as any).pdfjsWorker = workerModule.default || workerModule;
+    } catch (workerErr) {
+      console.warn('[PDFJS] Direct worker load note:', workerErr);
+    }
+  }
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
   return (pdfjs.default || pdfjs) as any;
 }
