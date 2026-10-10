@@ -1,24 +1,23 @@
 import React from 'react';
 import Link from 'next/link';
-import { BookOpen, Layers, Sparkles, ArrowRight } from 'lucide-react';
-import { HeroComposition } from '@/components/magazines/hero-composition';
+import { BookOpen, Layers, ArrowRight } from 'lucide-react';
+import { HeroVideoLoop } from './hero-video-loop';
 import { Magazine } from '@/types/magazine';
 
 interface HeroSectionProps {
   departmentsCount: number;
   publishedCount: number;
-  magazines: Magazine[];
+  magazines?: Magazine[];
 }
 
 export function HeroSection({
   departmentsCount,
   publishedCount,
-  magazines,
 }: HeroSectionProps) {
   return (
     <section className="border-b-2 border-[#1A1A1A] bg-transparent pt-12 pb-20 px-6 sm:px-10">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-10 items-center">
           {/* Left Column: Typography & CTAs */}
           <div className="lg:col-span-6 space-y-6 text-left">
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight text-[#1A1A1A] leading-[1.08]">
@@ -79,9 +78,9 @@ export function HeroSection({
             </div>
           </div>
 
-          {/* Right Column: Layered 3D Physical Magazine Composition */}
-          <div className="lg:col-span-6 flex justify-center items-center -translate-y-10">
-            <HeroComposition magazines={magazines} />
+          {/* Right Column: Hero Continuous Video Loop Reel */}
+          <div className="lg:col-span-6 flex justify-center items-center w-full">
+            <HeroVideoLoop />
           </div>
         </div>
       </div>
