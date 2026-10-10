@@ -2,8 +2,38 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Shield } from 'lucide-react';
+import { FooterConfig } from '@/types/cms';
 
-export function Footer() {
+interface FooterProps {
+  config?: FooterConfig;
+}
+
+export function Footer({ config }: FooterProps) {
+  const brandDescription =
+    config?.brand_description ||
+    'The official digital repository preserving annual research journals, capstone periodicals, and departmental magazines across all collegiate academic faculties.';
+
+  const logoUrl = config?.logo_url || '/images/the-rkive-logo.png';
+  const badgeText = config?.badge_text || 'Public Digital Library Architecture';
+
+  const quickLinks = config?.quick_links || [
+    { id: '1', href: '/', label: 'Library Front Page' },
+    { id: '2', href: '/magazines', label: 'Complete Magazine Archive' },
+    { id: '3', href: '/#departments', label: 'Academic Faculties' },
+    { id: '4', href: '/#about-us', label: 'About Us' },
+  ];
+
+  const facultyLinks = config?.faculty_links || [
+    { id: '1', href: '/department/computer-engineering', label: 'Computer Engineering' },
+    { id: '2', href: '/department/artificial-intelligence-machine-learning', label: 'AI & Machine Learning' },
+    { id: '3', href: '/department/information-technology', label: 'Information Technology' },
+    { id: '4', href: '/department/electronics-telecommunication', label: 'Electronics & Telecom' },
+  ];
+
+  const copyrightText = config?.copyright_text || 'THE RKIVE — Digital Magazine Archive. All rights reserved.';
+  const dev1 = config?.credits_developer_1 || 'Vedanth Gali';
+  const dev2 = config?.credits_developer_2 || 'Saathvik Shetty';
+
   return (
     <footer className="border-t-2 border-[#1A1A1A] bg-[#DDD4C5]/40 text-[#1A1A1A] mt-auto">
       <div className="max-w-7xl mx-auto px-6 sm:px-10 py-14">
@@ -14,7 +44,7 @@ export function Footer() {
             <Link href="/" className="inline-block">
               <div className="relative h-12 w-44">
                 <Image
-                  src="/images/the-rkive-logo.png"
+                  src={logoUrl}
                   alt="THE RKIVE Logo"
                   fill
                   sizes="176px"
@@ -24,12 +54,12 @@ export function Footer() {
             </Link>
 
             <p className="text-base sm:text-lg text-[#3E3C38] max-w-md leading-relaxed font-normal">
-              The official digital repository preserving annual research journals, capstone periodicals, and departmental magazines across all collegiate academic faculties.
+              {brandDescription}
             </p>
 
             <div className="pt-2">
               <span className="inline-block text-xs sm:text-sm font-mono font-bold uppercase tracking-widest text-[#1A1A1A] border-2 border-[#1A1A1A] bg-[#F4EFEB] px-3.5 py-2 shadow-[2px_2px_0px_#1A1A1A]">
-                Public Digital Library Architecture
+                {badgeText}
               </span>
             </div>
           </div>
@@ -40,26 +70,13 @@ export function Footer() {
               Navigation
             </h5>
             <ul className="space-y-3 text-base font-medium text-[#3E3C38]">
-              <li>
-                <Link href="/" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Library Front Page
-                </Link>
-              </li>
-              <li>
-                <Link href="/magazines" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Complete Magazine Archive
-                </Link>
-              </li>
-              <li>
-                <Link href="/#departments" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Academic Faculties
-                </Link>
-              </li>
-              <li>
-                <Link href="/#about-us" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  About Us
-                </Link>
-              </li>
+              {quickLinks.map((l) => (
+                <li key={l.id}>
+                  <Link href={l.href} className="hover:text-[#1B44B8] hover:underline transition-colors">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -69,26 +86,13 @@ export function Footer() {
               Faculties
             </h5>
             <ul className="space-y-3 text-base font-medium text-[#3E3C38]">
-              <li>
-                <Link href="/department/computer-engineering" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Computer Engineering
-                </Link>
-              </li>
-              <li>
-                <Link href="/department/artificial-intelligence-machine-learning" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  AI & Machine Learning
-                </Link>
-              </li>
-              <li>
-                <Link href="/department/information-technology" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Information Technology
-                </Link>
-              </li>
-              <li>
-                <Link href="/department/electronics-telecommunication" className="hover:text-[#1B44B8] hover:underline transition-colors">
-                  Electronics & Telecom
-                </Link>
-              </li>
+              {facultyLinks.map((l) => (
+                <li key={l.id}>
+                  <Link href={l.href} className="hover:text-[#1B44B8] hover:underline transition-colors">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -98,15 +102,17 @@ export function Footer() {
               Editorial Desk
             </h5>
             <ul className="space-y-3.5 text-base text-[#3E3C38]">
-              <li>
-                <Link
-                  href="/admin/login"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-[#1A1A1A] bg-[#F4EFEB] text-[#1A1A1A] font-semibold hover:bg-[#1A1A1A] hover:text-[#FAF7F2] transition-colors shadow-[2px_2px_0px_#1A1A1A] hover:shadow-[4px_4px_0px_#1B44B8] text-sm uppercase tracking-wider"
-                >
-                  <Shield className="w-4 h-4 text-[#C24A26]" />
-                  <span>Administrative Login</span>
-                </Link>
-              </li>
+              {config?.show_admin_link !== false && (
+                <li>
+                  <Link
+                    href="/admin/login"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-[#1A1A1A] bg-[#F4EFEB] text-[#1A1A1A] font-semibold hover:bg-[#1A1A1A] hover:text-[#FAF7F2] transition-colors shadow-[2px_2px_0px_#1A1A1A] hover:shadow-[4px_4px_0px_#1B44B8] text-sm uppercase tracking-wider"
+                  >
+                    <Shield className="w-4 h-4 text-[#C24A26]" />
+                    <span>Administrative Login</span>
+                  </Link>
+                </li>
+              )}
               <li>
                 <Link
                   href="/admin/dashboard"
@@ -115,26 +121,27 @@ export function Footer() {
                   Department Workspace
                 </Link>
               </li>
-              <li>
-                <span className="text-xs sm:text-sm font-mono text-[#706B62] font-medium block">
-                  Row Level Security (RLS) Active
-                </span>
-              </li>
+              {config?.show_rls_badge !== false && (
+                <li>
+                  <span className="text-xs sm:text-sm font-mono text-[#706B62] font-medium block">
+                    Row Level Security (RLS) Active
+                  </span>
+                </li>
+              )}
             </ul>
           </div>
         </div>
 
         {/* Single Integrated Footer Bottom Bar */}
         <div className="mt-14 pt-8 border-t-2 border-[#1A1A1A]/20 flex flex-col md:flex-row items-center justify-between gap-4 text-sm sm:text-base text-[#3E3C38]">
-          <p>© {new Date().getFullYear()} THE RKIVE — Digital Magazine Archive. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {copyrightText}</p>
 
           {/* Developer Credits */}
           <div className="text-center font-mono text-sm sm:text-base text-[#3E3C38]">
             <span>Developed by </span>
-            <span className="font-bold text-[#1A1A1A]">Vedanth Gali</span>
+            <span className="font-bold text-[#1A1A1A]">{dev1}</span>
             <span className="font-bold text-[#1A1A1A]">, </span>
-            <span className="font-bold text-[#1A1A1A]">Saathvik Shetty
-            </span>
+            <span className="font-bold text-[#1A1A1A]">{dev2}</span>
           </div>
         </div>
       </div>

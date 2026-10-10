@@ -1,0 +1,522 @@
+{
+  "draft": {
+    "header": {
+      "logo_url": "/images/the-rkive-logo.png",
+      "logo_alt": "THE RKIVE Logo",
+      "brand_name": "THE RKIVE",
+      "tagline": "College Digital Magazine Archive",
+      "badge_text": "PUBLIC ARCHIVE",
+      "nav_links": [
+        {
+          "id": "nav-1",
+          "label": "Magazine Archive",
+          "href": "/magazines",
+          "is_visible": true
+        },
+        {
+          "id": "nav-2",
+          "label": "Departments",
+          "href": "/#departments",
+          "is_visible": true
+        },
+        {
+          "id": "nav-3",
+          "label": "About Us",
+          "href": "/#about-us",
+          "is_visible": true
+        }
+      ],
+      "cta_button": {
+        "label": "Editorial Desk",
+        "href": "/admin/login",
+        "is_visible": true
+      },
+      "sticky": true,
+      "backdrop_blur": true
+    },
+    "hero": {
+      "is_visible": true,
+      "eyebrow": "Collegiate Digital Repository",
+      "title_line1": "Welcome to",
+      "title_line2": "THE RKIVE",
+      "title_emphasis": "",
+      "subtitle": "Explore the digital magazines, engineering periodicals, capstone proceedings, and creative scholarship produced across our college academic community.",
+      "primary_cta": {
+        "label": "Explore Magazines",
+        "href": "/magazines",
+        "is_visible": true,
+        "icon": "BookOpen"
+      },
+      "secondary_cta": {
+        "label": "Browse Departments",
+        "href": "#departments",
+        "is_visible": true,
+        "icon": "Layers"
+      },
+      "stats": [
+        {
+          "id": "stat-1",
+          "value": "6",
+          "label": "Academic Faculties",
+          "is_visible": true,
+          "is_dynamic": true,
+          "dynamic_source": "departments"
+        },
+        {
+          "id": "stat-2",
+          "value": "10",
+          "label": "Published Editions",
+          "suffix": "+",
+          "is_visible": true,
+          "is_dynamic": true,
+          "dynamic_source": "published_magazines"
+        },
+        {
+          "id": "stat-3",
+          "value": "100%",
+          "label": "Peer Governed",
+          "is_visible": true,
+          "is_dynamic": false
+        }
+      ],
+      "layout_variant": "split-video",
+      "custom_artwork_url": "/images/rkive-painting.png",
+      "custom_artwork_alt": "THE RKIVE Editorial Artwork"
+    },
+    "archive_reel": {
+      "is_visible": true,
+      "badge_title": "THE RKIVE // ARCHIVE REEL",
+      "loop_tag_text": "CONTINUOUS LOOP",
+      "video_url": "/hero-loop-video.mp4",
+      "poster_image_url": "/images/rkive-painting.png",
+      "auto_play": true,
+      "loop": true,
+      "muted_default": true,
+      "show_controls": true,
+      "show_fullscreen_button": true,
+      "caption": "Official Collegiate Archive Reel"
+    },
+    "recent_releases": {
+      "is_visible": true,
+      "eyebrow": "Recent Releases",
+      "title": "Newly Published",
+      "subtitle": "The latest peer-reviewed digital magazines, periodicals, and research publications released across academic departments.",
+      "view_all_link_text": "View Complete Archive",
+      "view_all_link_href": "/magazines",
+      "mode": "automatic",
+      "max_items": 4,
+      "featured_magazine_ids": [],
+      "card_variant": "standard",
+      "show_department_badge": true,
+      "show_academic_year": true,
+      "show_edition": true,
+      "show_page_count": true
+    },
+    "departments_showcase": {
+      "is_visible": true,
+      "eyebrow": "Academic Directory",
+      "title": "Explore by Department",
+      "subtitle": "Each department maintains its own editorial board, publishing student capstones, engineering breakthroughs, and annual reviews.",
+      "mode": "automatic",
+      "max_items": 8,
+      "featured_department_ids": [],
+      "department_overrides": {}
+    },
+    "about_section": {
+      "is_visible": true,
+      "eyebrow": "Editorial Archive & Mission",
+      "title": "About THE RKIVE",
+      "body_paragraphs": [
+        "THE RKIVE is our collegiate digital publishing platform and academic repository. We curate and preserve peer-reviewed departmental magazines, engineering periodicals, symposium capstones, and creative scholarship across all academic faculties.",
+        "Governed under faculty advisory and student editorial oversight, every publication is archived with institutional permanence, high visual craftsmanship, and open academic accessibility."
+      ],
+      "cta": {
+        "label": "Explore the Archive",
+        "href": "/magazines",
+        "is_visible": true
+      },
+      "image_url": "/images/rkive-painting.png",
+      "image_alt": "The Rkive Editorial Artwork",
+      "layout_variant": "image-right"
+    },
+    "archive_manifesto": {
+      "is_visible": false,
+      "eyebrow": "Editorial Governance & Archival Mission",
+      "title": "Preserving Collegiate Scholarship & Departmental Legacy",
+      "description": "THE RKIVE serves as the permanent digital repository for our college institution. Every edition is authenticated by faculty editorial advisors, securely indexed with PostgreSQL Row Level Security, and made freely accessible for global academic inquiry.",
+      "badges": [
+        {
+          "id": "b-1",
+          "icon": "ShieldCheck",
+          "text": "Faculty Reviewed"
+        },
+        {
+          "id": "b-2",
+          "icon": "BookmarkCheck",
+          "text": "Permanent Digital Records"
+        },
+        {
+          "id": "b-3",
+          "icon": "BookOpen",
+          "text": "Open Academic Access"
+        }
+      ]
+    },
+    "bookshelf_section": {
+      "is_visible": false,
+      "eyebrow": "Interactive Browsing",
+      "title": "The Digital Bookshelf",
+      "subtitle": "Browse through recent college publications as physical volumes. Hover or click to explore individual issues.",
+      "max_items": 6
+    },
+    "footer": {
+      "brand_description": "The official digital repository preserving annual research journals, capstone periodicals, and departmental magazines across all collegiate academic faculties.",
+      "logo_url": "/images/the-rkive-logo.png",
+      "badge_text": "Public Digital Library Architecture",
+      "quick_links": [
+        {
+          "id": "fl-1",
+          "label": "Library Front Page",
+          "href": "/"
+        },
+        {
+          "id": "fl-2",
+          "label": "Complete Magazine Archive",
+          "href": "/magazines"
+        },
+        {
+          "id": "fl-3",
+          "label": "Academic Faculties",
+          "href": "/#departments"
+        },
+        {
+          "id": "fl-4",
+          "label": "About Us",
+          "href": "/#about-us"
+        }
+      ],
+      "faculty_links": [
+        {
+          "id": "fc-1",
+          "label": "Computer Engineering",
+          "href": "/department/computer-engineering"
+        },
+        {
+          "id": "fc-2",
+          "label": "AI & Machine Learning",
+          "href": "/department/artificial-intelligence-machine-learning"
+        },
+        {
+          "id": "fc-3",
+          "label": "Information Technology",
+          "href": "/department/information-technology"
+        },
+        {
+          "id": "fc-4",
+          "label": "Electronics & Telecom",
+          "href": "/department/electronics-telecommunication"
+        }
+      ],
+      "social_links": [],
+      "copyright_text": "THE RKIVE — Digital Magazine Archive. All rights reserved.",
+      "credits_developer_1": "Vedanth Gali",
+      "credits_developer_2": "Saathvik Shetty",
+      "show_admin_link": true,
+      "show_rls_badge": true
+    },
+    "theme": {
+      "accent_primary": "#1B44B8",
+      "accent_secondary": "#C24A26",
+      "accent_highlight": "#B58A55",
+      "surface_background": "#FAF7F2",
+      "surface_card": "#F4EFEB",
+      "text_primary": "#1A1A1A",
+      "text_secondary": "#3E3C38",
+      "typography_preset": "editorial-serif",
+      "border_style": "thick-solid",
+      "section_spacing": "normal"
+    },
+    "seo": {
+      "meta_title": "THE RKIVE — College Digital Magazine Archive & Publications",
+      "meta_description": "Explore peer-reviewed digital magazines, engineering symposium journals, and student capstone periodicals from all academic departments.",
+      "og_image_url": "/images/the-rkive-logo.png",
+      "keywords": [
+        "college magazine",
+        "digital archive",
+        "academic periodicals",
+        "engineering journals"
+      ]
+    },
+    "section_order": [
+      "hero",
+      "archive_reel",
+      "recent_releases",
+      "departments_showcase",
+      "about_section",
+      "bookshelf_section",
+      "archive_manifesto"
+    ]
+  },
+  "published": {
+    "header": {
+      "logo_url": "/images/the-rkive-logo.png",
+      "logo_alt": "THE RKIVE Logo",
+      "brand_name": "THE RKIVE",
+      "tagline": "College Digital Magazine Archive",
+      "badge_text": "PUBLIC ARCHIVE",
+      "nav_links": [
+        {
+          "id": "nav-1",
+          "label": "Magazine Archive",
+          "href": "/magazines",
+          "is_visible": true
+        },
+        {
+          "id": "nav-2",
+          "label": "Departments",
+          "href": "/#departments",
+          "is_visible": true
+        },
+        {
+          "id": "nav-3",
+          "label": "About Us",
+          "href": "/#about-us",
+          "is_visible": true
+        }
+      ],
+      "cta_button": {
+        "label": "Editorial Desk",
+        "href": "/admin/login",
+        "is_visible": true
+      },
+      "sticky": true,
+      "backdrop_blur": true
+    },
+    "hero": {
+      "is_visible": true,
+      "eyebrow": "Collegiate Digital Repository",
+      "title_line1": "Welcome to",
+      "title_line2": "THE RKIVE",
+      "title_emphasis": "",
+      "subtitle": "Explore the digital magazines, engineering periodicals, capstone proceedings, and creative scholarship produced across our college academic community.",
+      "primary_cta": {
+        "label": "Explore Magazines",
+        "href": "/magazines",
+        "is_visible": true,
+        "icon": "BookOpen"
+      },
+      "secondary_cta": {
+        "label": "Browse Departments",
+        "href": "#departments",
+        "is_visible": true,
+        "icon": "Layers"
+      },
+      "stats": [
+        {
+          "id": "stat-1",
+          "value": "6",
+          "label": "Academic Faculties",
+          "is_visible": true,
+          "is_dynamic": true,
+          "dynamic_source": "departments"
+        },
+        {
+          "id": "stat-2",
+          "value": "10",
+          "label": "Published Editions",
+          "suffix": "+",
+          "is_visible": true,
+          "is_dynamic": true,
+          "dynamic_source": "published_magazines"
+        },
+        {
+          "id": "stat-3",
+          "value": "100%",
+          "label": "Peer Governed",
+          "is_visible": true,
+          "is_dynamic": false
+        }
+      ],
+      "layout_variant": "split-video",
+      "custom_artwork_url": "/images/rkive-painting.png",
+      "custom_artwork_alt": "THE RKIVE Editorial Artwork"
+    },
+    "archive_reel": {
+      "is_visible": true,
+      "badge_title": "THE RKIVE // ARCHIVE REEL",
+      "loop_tag_text": "CONTINUOUS LOOP",
+      "video_url": "/hero-loop-video.mp4",
+      "poster_image_url": "/images/rkive-painting.png",
+      "auto_play": true,
+      "loop": true,
+      "muted_default": true,
+      "show_controls": true,
+      "show_fullscreen_button": true,
+      "caption": "Official Collegiate Archive Reel"
+    },
+    "recent_releases": {
+      "is_visible": true,
+      "eyebrow": "Recent Releases",
+      "title": "Newly Published",
+      "subtitle": "The latest peer-reviewed digital magazines, periodicals, and research publications released across academic departments.",
+      "view_all_link_text": "View Complete Archive",
+      "view_all_link_href": "/magazines",
+      "mode": "automatic",
+      "max_items": 4,
+      "featured_magazine_ids": [],
+      "card_variant": "standard",
+      "show_department_badge": true,
+      "show_academic_year": true,
+      "show_edition": true,
+      "show_page_count": true
+    },
+    "departments_showcase": {
+      "is_visible": true,
+      "eyebrow": "Academic Directory",
+      "title": "Explore by Department",
+      "subtitle": "Each department maintains its own editorial board, publishing student capstones, engineering breakthroughs, and annual reviews.",
+      "mode": "automatic",
+      "max_items": 8,
+      "featured_department_ids": [],
+      "department_overrides": {}
+    },
+    "about_section": {
+      "is_visible": true,
+      "eyebrow": "Editorial Archive & Mission",
+      "title": "About THE RKIVE",
+      "body_paragraphs": [
+        "THE RKIVE is our collegiate digital publishing platform and academic repository. We curate and preserve peer-reviewed departmental magazines, engineering periodicals, symposium capstones, and creative scholarship across all academic faculties.",
+        "Governed under faculty advisory and student editorial oversight, every publication is archived with institutional permanence, high visual craftsmanship, and open academic accessibility."
+      ],
+      "cta": {
+        "label": "Explore the Archive",
+        "href": "/magazines",
+        "is_visible": true
+      },
+      "image_url": "/images/rkive-painting.png",
+      "image_alt": "The Rkive Editorial Artwork",
+      "layout_variant": "image-right"
+    },
+    "archive_manifesto": {
+      "is_visible": false,
+      "eyebrow": "Editorial Governance & Archival Mission",
+      "title": "Preserving Collegiate Scholarship & Departmental Legacy",
+      "description": "THE RKIVE serves as the permanent digital repository for our college institution. Every edition is authenticated by faculty editorial advisors, securely indexed with PostgreSQL Row Level Security, and made freely accessible for global academic inquiry.",
+      "badges": [
+        {
+          "id": "b-1",
+          "icon": "ShieldCheck",
+          "text": "Faculty Reviewed"
+        },
+        {
+          "id": "b-2",
+          "icon": "BookmarkCheck",
+          "text": "Permanent Digital Records"
+        },
+        {
+          "id": "b-3",
+          "icon": "BookOpen",
+          "text": "Open Academic Access"
+        }
+      ]
+    },
+    "bookshelf_section": {
+      "is_visible": false,
+      "eyebrow": "Interactive Browsing",
+      "title": "The Digital Bookshelf",
+      "subtitle": "Browse through recent college publications as physical volumes. Hover or click to explore individual issues.",
+      "max_items": 6
+    },
+    "footer": {
+      "brand_description": "The official digital repository preserving annual research journals, capstone periodicals, and departmental magazines across all collegiate academic faculties.",
+      "logo_url": "/images/the-rkive-logo.png",
+      "badge_text": "Public Digital Library Architecture",
+      "quick_links": [
+        {
+          "id": "fl-1",
+          "label": "Library Front Page",
+          "href": "/"
+        },
+        {
+          "id": "fl-2",
+          "label": "Complete Magazine Archive",
+          "href": "/magazines"
+        },
+        {
+          "id": "fl-3",
+          "label": "Academic Faculties",
+          "href": "/#departments"
+        },
+        {
+          "id": "fl-4",
+          "label": "About Us",
+          "href": "/#about-us"
+        }
+      ],
+      "faculty_links": [
+        {
+          "id": "fc-1",
+          "label": "Computer Engineering",
+          "href": "/department/computer-engineering"
+        },
+        {
+          "id": "fc-2",
+          "label": "AI & Machine Learning",
+          "href": "/department/artificial-intelligence-machine-learning"
+        },
+        {
+          "id": "fc-3",
+          "label": "Information Technology",
+          "href": "/department/information-technology"
+        },
+        {
+          "id": "fc-4",
+          "label": "Electronics & Telecom",
+          "href": "/department/electronics-telecommunication"
+        }
+      ],
+      "social_links": [],
+      "copyright_text": "THE RKIVE — Digital Magazine Archive. All rights reserved.",
+      "credits_developer_1": "Vedanth Gali",
+      "credits_developer_2": "Saathvik Shetty",
+      "show_admin_link": true,
+      "show_rls_badge": true
+    },
+    "theme": {
+      "accent_primary": "#1B44B8",
+      "accent_secondary": "#C24A26",
+      "accent_highlight": "#B58A55",
+      "surface_background": "#FAF7F2",
+      "surface_card": "#F4EFEB",
+      "text_primary": "#1A1A1A",
+      "text_secondary": "#3E3C38",
+      "typography_preset": "editorial-serif",
+      "border_style": "thick-solid",
+      "section_spacing": "normal"
+    },
+    "seo": {
+      "meta_title": "THE RKIVE — College Digital Magazine Archive & Publications",
+      "meta_description": "Explore peer-reviewed digital magazines, engineering symposium journals, and student capstone periodicals from all academic departments.",
+      "og_image_url": "/images/the-rkive-logo.png",
+      "keywords": [
+        "college magazine",
+        "digital archive",
+        "academic periodicals",
+        "engineering journals"
+      ]
+    },
+    "section_order": [
+      "hero",
+      "archive_reel",
+      "recent_releases",
+      "departments_showcase",
+      "about_section",
+      "bookshelf_section",
+      "archive_manifesto"
+    ]
+  },
+  "published_at": "2026-10-10T19:05:22.149Z",
+  "published_by_name": "Vedanth Gali",
+  "draft_updated_at": "2026-10-10T19:05:22.149Z",
+  "version": 1
+}

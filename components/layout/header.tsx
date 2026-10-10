@@ -6,16 +6,31 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Shield, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HeaderConfig } from '@/types/cms';
 
-export function Header() {
+interface HeaderProps {
+  config?: HeaderConfig;
+}
+
+export function Header({ config }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navLinks = [
-    { href: '/magazines', label: 'Magazine Archive' },
-    { href: '/#departments', label: 'Departments' },
-    { href: '/#about-us', label: 'About Us' },
-  ];
+  const navLinks = config?.nav_links
+    ? config.nav_links.filter((l) => l.is_visible !== false)
+    : [
+        { id: '1', href: '/magazines', label: 'Magazine Archive', is_visible: true },
+        { id: '2', href: '/#departments', label: 'Departments', is_visible: true },
+        { id: '3', href: '/#about-us', label: 'About Us', is_visible: true },
+      ];
+
+  const logoUrl = config?.logo_url || '/images/the-rkive-logo.png';
+  const logoAlt = config?.logo_alt || 'THE RKIVE Logo';
+  const ctaButton = config?.cta_button || {
+    label: 'Editorial Desk',
+    href: '/admin/login',
+    is_visible: true,
+  };
 
   return (
     <header className="border-b-2 border-[#1A1A1A] bg-[#EAE3D7]/95 backdrop-blur-md sticky top-0 z-50 transition-all shadow-sm">
@@ -25,8 +40,8 @@ export function Header() {
         <Link href="/" className="flex items-center group py-1">
           <div className="relative h-12 sm:h-16 md:h-20 w-36 sm:w-48 md:w-60 transition-transform duration-200 group-hover:scale-[1.02]">
             <Image
-              src="/images/the-rkive-logo.png"
-              alt="THE RKIVE Logo"
+              src={logoUrl}
+              alt={logoAlt}
               fill
               priority
               sizes="(max-width: 640px) 144px, (max-width: 768px) 192px, 240px"
@@ -61,15 +76,18 @@ export function Header() {
             );
           })}
 
-          <div className="h-5 w-px bg-[#1A1A1A]/20" />
-
-          <Link
-            href="/admin/login"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-none border-2 border-[#1A1A1A] bg-[#F4EFEB] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#FAF7F2] hover:border-[#1A1A1A] transition-all shadow-[2px_2px_0px_#1A1A1A] hover:shadow-[4px_4px_0px_#1B44B8] group font-semibold text-sm uppercase tracking-wider"
-          >
-            <Shield className="w-4 h-4 text-[#C24A26] group-hover:text-[#FAF7F2] transition-colors" />
-            <span>Editorial Desk</span>
-          </Link>
+          {ctaButton.is_visible && (
+            <>
+              <div className="h-5 w-px bg-[#1A1A1A]/20" />
+              <Link
+                href={ctaButton.href || '/admin/login'}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-none border-2 border-[#1A1A1A] bg-[#F4EFEB] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#FAF7F2] hover:border-[#1A1A1A] transition-all shadow-[2px_2px_0px_#1A1A1A] hover:shadow-[4px_4px_0px_#1B44B8] group font-semibold text-sm uppercase tracking-wider"
+              >
+                <Shield className="w-4 h-4 text-[#C24A26] group-hover:text-[#FAF7F2] transition-colors" />
+                <span>{ctaButton.label || 'Editorial Desk'}</span>
+              </Link>
+            </>
+          )}
         </nav>
 
         {/* Mobile Menu Button */}
@@ -96,16 +114,18 @@ export function Header() {
                 {link.label}
               </Link>
             ))}
-            <div className="pt-3 border-t border-[#2C2824]/15">
-              <Link
-                href="/admin/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="inline-flex items-center justify-center gap-2 w-full py-2.5 rounded-xs bg-[#121210] text-[#FAF7F2] text-sm font-semibold uppercase tracking-wider shadow-sm"
-              >
-                <Shield className="w-4 h-4 text-[#C4934E]" />
-                <span>Editorial Desk Login</span>
-              </Link>
-            </div>
+            {ctaButton.is_visible && (
+              <div className="pt-3 border-t border-[#2C2824]/15">
+                <Link
+                  href={ctaButton.href || '/admin/login'}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="inline-flex items-center justify-center gap-2 w-full py-2.5 rounded-xs bg-[#121210] text-[#FAF7F2] text-sm font-semibold uppercase tracking-wider shadow-sm"
+                >
+                  <Shield className="w-4 h-4 text-[#C4934E]" />
+                  <span>{ctaButton.label || 'Editorial Desk Login'}</span>
+                </Link>
+              </div>
+            )}
           </nav>
         </div>
       )}

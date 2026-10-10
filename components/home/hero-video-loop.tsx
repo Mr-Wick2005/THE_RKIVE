@@ -3,13 +3,23 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, Volume2, VolumeX, Maximize2, Sparkles, Film } from 'lucide-react';
+import { ArchiveReelConfig } from '@/types/cms';
 
-export function HeroVideoLoop() {
+interface HeroVideoLoopProps {
+  config?: ArchiveReelConfig;
+}
+
+export function HeroVideoLoop({ config }: HeroVideoLoopProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(config?.muted_default ?? true);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const videoSrc = config?.video_url || '/hero-loop-video.mp4';
+  const badgeTitle = config?.badge_title || 'THE RKIVE // ARCHIVE REEL';
+  const loopTagText = config?.loop_tag_text || 'CONTINUOUS LOOP';
+  const showFullscreen = config?.show_fullscreen_button !== false;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -93,13 +103,13 @@ export function HeroVideoLoop() {
             </span>
             <span className="font-bold tracking-wider uppercase flex items-center gap-1.5 text-[11px] sm:text-xs">
               <Film className="w-3.5 h-3.5 text-[#1B44B8]" />
-              THE RKIVE // ARCHIVE REEL
+              {badgeTitle}
             </span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="hidden sm:inline-block px-1.5 py-0.5 bg-[#1A1A1A] text-[#FAF7F2] text-[10px] uppercase font-bold tracking-widest">
-              CONTINUOUS LOOP
+              {loopTagText}
             </span>
 
             {/* Quick Audio Toggle */}
@@ -117,14 +127,16 @@ export function HeroVideoLoop() {
             </button>
 
             {/* Fullscreen Button */}
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              title="Full screen preview"
-              className="p-1 hover:bg-[#1A1A1A] hover:text-[#FAF7F2] border border-[#1A1A1A] transition-colors rounded-none hidden xs:block"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
+            {showFullscreen && (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                title="Full screen preview"
+                className="p-1 hover:bg-[#1A1A1A] hover:text-[#FAF7F2] border border-[#1A1A1A] transition-colors rounded-none hidden xs:block"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -135,15 +147,15 @@ export function HeroVideoLoop() {
         >
           <video
             ref={videoRef}
-            autoPlay
-            loop
+            autoPlay={config?.auto_play ?? true}
+            loop={config?.loop ?? true}
             muted={isMuted}
             playsInline
             preload="auto"
             onLoadedData={() => setIsLoaded(true)}
             className="w-full h-full object-cover sm:object-contain bg-black"
           >
-            <source src="/hero-loop-video.mp4" type="video/mp4" />
+            <source src={videoSrc} type="video/mp4" />
             Your browser does not support HTML5 video.
           </video>
 
