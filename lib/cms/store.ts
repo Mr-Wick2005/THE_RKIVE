@@ -21,6 +21,28 @@ const BACKUP_FILE = path.resolve(BACKUP_DIR, 'landing-page-config.json');
 const VERSIONS_BACKUP_FILE = path.resolve(BACKUP_DIR, 'landing-page-versions.json');
 const MEDIA_BACKUP_FILE = path.resolve(BACKUP_DIR, 'cms-media.json');
 
+const STORAGE_BUCKET = 'cms-assets';
+const STORAGE_CONFIG_PATH = 'cms-data/landing-page-config.json';
+const STORAGE_VERSIONS_PATH = 'cms-data/landing-page-versions.json';
+const STORAGE_MEDIA_PATH = 'cms-data/cms-media.json';
+
+// In-memory runtime cache for serverless request reuse (TTL 5s)
+let cachedCloudConfig: {
+  data: {
+    draft: LandingPageConfig;
+    published: LandingPageConfig;
+    published_at?: string;
+    published_by_name?: string;
+    draft_updated_at?: string;
+    version: number;
+  };
+  cachedAt: number;
+} | null = null;
+
+function invalidateRuntimeCache() {
+  cachedCloudConfig = null;
+}
+
 function ensureBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) {
     try {
@@ -106,11 +128,172 @@ function writeBackupMedia(media: CmsMediaAsset[]) {
   } catch (e) {}
 }
 
+// ==========================================
+// SUPABASE STORAGE CLOUD PERSISTENCE ENGINE
+// Guarantees persistence across Vercel Lambdas
+// ==========================================
+
+async function ensureBucketMimeType(supabase: any) {
+  try {
+    await supabase.storage.updateBucket(STORAGE_BUCKET, {
+      public: true,
+      fileSizeLimit: 52428800,
+      allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/svg+xml',
+        'video/mp4',
+        'application/json',
+        'text/plain',
+      ],
+    });
+  } catch (err) {}
+}
+
+async function readCloudConfig(): Promise<{
+  draft: LandingPageConfig;
+  published: LandingPageConfig;
+  published_at?: string;
+  published_by_name?: string;
+  draft_updated_at?: string;
+  version: number;
+} | null> {
+  if (cachedCloudConfig && Date.now() - cachedCloudConfig.cachedAt < 5000) {
+    return cachedCloudConfig.data;
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(STORAGE_CONFIG_PATH);
+
+    if (!error && data) {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      const res = {
+        draft: { ...DEFAULT_LANDING_PAGE_CONFIG, ...(parsed.draft || {}) },
+        published: { ...DEFAULT_LANDING_PAGE_CONFIG, ...(parsed.published || {}) },
+        published_at: parsed.published_at,
+        published_by_name: parsed.published_by_name,
+        draft_updated_at: parsed.draft_updated_at,
+        version: parsed.version || 1,
+      };
+      cachedCloudConfig = { data: res, cachedAt: Date.now() };
+      return res;
+    }
+  } catch (err) {
+    // Cloud storage read error, will fall back
+  }
+  return null;
+}
+
+async function writeCloudConfig(data: any): Promise<boolean> {
+  invalidateRuntimeCache();
+  try {
+    const supabase = createAdminClient();
+    const buffer = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
+    let { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(STORAGE_CONFIG_PATH, buffer, {
+        contentType: 'application/json',
+        upsert: true,
+      });
+
+    if (error && (error as any).code === 'InvalidMimeType') {
+      await ensureBucketMimeType(supabase);
+      const retry = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(STORAGE_CONFIG_PATH, buffer, {
+          contentType: 'application/json',
+          upsert: true,
+        });
+      error = retry.error;
+    }
+
+    if (!error) {
+      cachedCloudConfig = { data, cachedAt: Date.now() };
+      return true;
+    } else {
+      console.error('[CMS:CLOUD_STORAGE_UPLOAD_ERROR]', error);
+    }
+  } catch (err) {
+    console.error('[CMS:CLOUD_WRITE_EXCEPTION]', err);
+  }
+  return false;
+}
+
+async function readCloudVersions(): Promise<CmsVersionSnapshot[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(STORAGE_VERSIONS_PATH);
+    if (!error && data) {
+      const text = await data.text();
+      return JSON.parse(text);
+    }
+  } catch (err) {}
+  return [];
+}
+
+async function writeCloudVersions(versions: CmsVersionSnapshot[]): Promise<boolean> {
+  try {
+    const supabase = createAdminClient();
+    const buffer = Buffer.from(JSON.stringify(versions, null, 2), 'utf8');
+    let { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(STORAGE_VERSIONS_PATH, buffer, {
+        contentType: 'application/json',
+        upsert: true,
+      });
+    return !error;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function readCloudMedia(): Promise<CmsMediaAsset[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(STORAGE_MEDIA_PATH);
+    if (!error && data) {
+      const text = await data.text();
+      return JSON.parse(text);
+    }
+  } catch (err) {}
+  return [];
+}
+
+async function writeCloudMedia(media: CmsMediaAsset[]): Promise<boolean> {
+  try {
+    const supabase = createAdminClient();
+    const buffer = Buffer.from(JSON.stringify(media, null, 2), 'utf8');
+    let { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(STORAGE_MEDIA_PATH, buffer, {
+        contentType: 'application/json',
+        upsert: true,
+      });
+    return !error;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ==========================================
+// PUBLIC CMS READ & WRITE API FUNCTIONS
+// ==========================================
+
 /**
  * Returns the currently published LandingPageConfig for the public homepage.
- * Highly resilient: uses Supabase DB if available, fallback JSON, or default config.
+ * Highly resilient: uses Supabase DB if available, Supabase Cloud Storage, or local fallback.
  */
 export async function getPublishedLandingPageConfig(): Promise<LandingPageConfig> {
+  // 1. Try DB table homepage_configs
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -128,9 +311,17 @@ export async function getPublishedLandingPageConfig(): Promise<LandingPageConfig
       return sanitized;
     }
   } catch (err) {
-    // Fallback to local backup or default
+    // DB table might not exist
   }
 
+  // 2. Try Supabase Cloud Storage (primary cloud-persistent store on Vercel)
+  const cloud = await readCloudConfig();
+  if (cloud && cloud.published) {
+    const { sanitized } = validateAndSanitizeConfig(cloud.published);
+    return sanitized;
+  }
+
+  // 3. Fallback to local backup or default
   const backup = readBackupConfig();
   const { sanitized } = validateAndSanitizeConfig(backup.published);
   return sanitized;
@@ -140,6 +331,7 @@ export async function getPublishedLandingPageConfig(): Promise<LandingPageConfig
  * Returns the current draft LandingPageConfig for the Super Admin Studio.
  */
 export async function getDraftLandingPageConfig(): Promise<LandingPageConfig> {
+  // 1. Try DB table homepage_configs
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -158,6 +350,14 @@ export async function getDraftLandingPageConfig(): Promise<LandingPageConfig> {
     }
   } catch (err) {}
 
+  // 2. Try Supabase Cloud Storage
+  const cloud = await readCloudConfig();
+  if (cloud && cloud.draft) {
+    const { sanitized } = validateAndSanitizeConfig(cloud.draft);
+    return sanitized;
+  }
+
+  // 3. Fallback to local backup or default
   const backup = readBackupConfig();
   const { sanitized } = validateAndSanitizeConfig(backup.draft);
   return sanitized;
@@ -167,6 +367,7 @@ export async function getDraftLandingPageConfig(): Promise<LandingPageConfig> {
  * Fetches all data needed to initialize the Super Admin Landing Page Studio.
  */
 export async function getLandingPageStudioData(profile: Profile): Promise<CmsStudioData> {
+  const supabaseAdmin = createAdminClient();
   let draft = DEFAULT_LANDING_PAGE_CONFIG;
   let published = DEFAULT_LANDING_PAGE_CONFIG;
   let published_at: string | undefined;
@@ -176,9 +377,8 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
   let versions: CmsVersionSnapshot[] = [];
   let media: CmsMediaAsset[] = [];
 
-  const supabaseAdmin = createAdminClient();
-
-  // 1. Fetch config from Supabase or fallback
+  // 1. Try DB table
+  let dbLoaded = false;
   try {
     const { data: configRow, error: configErr } = await supabaseAdmin
       .from('homepage_configs' as any)
@@ -193,17 +393,9 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
       published_by_name = (configRow as any).profiles?.full_name;
       draft_updated_at = (configRow as any).draft_updated_at;
       version = (configRow as any).version || 1;
-    } else {
-      const backup = readBackupConfig();
-      draft = backup.draft;
-      published = backup.published;
-      published_at = backup.published_at;
-      published_by_name = backup.published_by_name;
-      draft_updated_at = backup.draft_updated_at;
-      version = backup.version;
+      dbLoaded = true;
     }
 
-    // 2. Fetch versions
     const { data: versionRows, error: vErr } = await supabaseAdmin
       .from('homepage_versions' as any)
       .select('*, profiles:published_by(full_name, email)')
@@ -222,11 +414,8 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
         note: v.note,
         change_summary: v.change_summary,
       }));
-    } else {
-      versions = readBackupVersions();
     }
 
-    // 3. Fetch media
     const { data: mediaRows, error: mErr } = await supabaseAdmin
       .from('cms_media' as any)
       .select('*, profiles:uploaded_by(full_name)')
@@ -245,22 +434,41 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
         created_at: m.created_at,
         uploaded_by_name: m.profiles?.full_name,
       }));
-    } else {
-      media = readBackupMedia();
     }
-  } catch (err) {
-    const backup = readBackupConfig();
-    draft = backup.draft;
-    published = backup.published;
-    published_at = backup.published_at;
-    published_by_name = backup.published_by_name;
-    draft_updated_at = backup.draft_updated_at;
-    version = backup.version;
-    versions = readBackupVersions();
-    media = readBackupMedia();
+  } catch (err) {}
+
+  // 2. If DB config was not loaded, load from Cloud Storage
+  if (!dbLoaded) {
+    const cloud = await readCloudConfig();
+    if (cloud) {
+      draft = cloud.draft;
+      published = cloud.published;
+      published_at = cloud.published_at;
+      published_by_name = cloud.published_by_name;
+      draft_updated_at = cloud.draft_updated_at;
+      version = cloud.version;
+    } else {
+      const backup = readBackupConfig();
+      draft = backup.draft;
+      published = backup.published;
+      published_at = backup.published_at;
+      published_by_name = backup.published_by_name;
+      draft_updated_at = backup.draft_updated_at;
+      version = backup.version;
+    }
   }
 
-  // 4. Fetch available published magazines and departments for select pickers
+  if (versions.length === 0) {
+    const cloudVersions = await readCloudVersions();
+    versions = cloudVersions.length > 0 ? cloudVersions : readBackupVersions();
+  }
+
+  if (media.length === 0) {
+    const cloudMedia = await readCloudMedia();
+    media = cloudMedia.length > 0 ? cloudMedia : readBackupMedia();
+  }
+
+  // 3. Resolve published magazines and active departments from DB
   let available_magazines: any[] = [];
   let available_departments: any[] = [];
 
@@ -309,9 +517,7 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
         magazine_count: available_magazines.filter(m => m.department_id === d.id).length,
       }));
     }
-  } catch (adminErr) {
-    // If admin fetch fails, fallback gracefully
-  }
+  } catch (adminErr) {}
 
   if (available_magazines.length === 0 && available_departments.length === 0) {
     available_magazines = FALLBACK_MAGAZINES.map(m => ({
@@ -349,13 +555,13 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
 }
 
 /**
- * Saves draft changes without affecting the public website.
+ * Saves draft configuration without affecting the live public website.
  */
 export async function saveLandingPageDraft(
-  draftData: LandingPageConfig,
+  draft: LandingPageConfig,
   profile: Profile
 ): Promise<{ success: boolean; error?: string }> {
-  const { sanitized, result } = validateAndSanitizeConfig(draftData);
+  const { sanitized, result } = validateAndSanitizeConfig(draft);
   if (!result.isValid) {
     return {
       success: false,
@@ -365,17 +571,22 @@ export async function saveLandingPageDraft(
 
   const now = new Date().toISOString();
 
+  // Load current cloud config or local backup to preserve existing published config
+  let currentConfig = await readCloudConfig();
+  if (!currentConfig) {
+    currentConfig = readBackupConfig();
+  }
+
+  // 1. Try DB table update/insert
   try {
     const supabase = createAdminClient();
-
-    // Check if row exists
-    const { data: existing } = await supabase
+    const { data: existing, error: selectErr } = await supabase
       .from('homepage_configs' as any)
       .select('id, published_data, version')
       .eq('key', 'main')
       .single();
 
-    if (existing) {
+    if (!selectErr && existing) {
       await supabase
         .from('homepage_configs' as any)
         .update({
@@ -384,29 +595,39 @@ export async function saveLandingPageDraft(
           draft_updated_by: profile.id,
         })
         .eq('key', 'main');
-    } else {
+    } else if (!selectErr) {
       await supabase.from('homepage_configs' as any).insert({
         key: 'main',
         draft_data: sanitized,
-        published_data: sanitized,
+        published_data: currentConfig.published || sanitized,
         published_at: now,
         published_by: profile.id,
         draft_updated_at: now,
         draft_updated_by: profile.id,
-        version: 1,
+        version: currentConfig.version || 1,
       });
     }
   } catch (err) {
-    // Database table might not exist yet, save to backup
+    // Database table might not exist yet
   }
 
-  // Always update backup file
-  const currentBackup = readBackupConfig();
-  writeBackupConfig({
-    ...currentBackup,
+  // 2. Persist to Supabase Cloud Storage (Guaranteed cross-instance persistence on Vercel)
+  const updatedCloudConfig = {
+    ...currentConfig,
     draft: sanitized,
     draft_updated_at: now,
-  });
+    draft_updated_by: profile.id,
+  };
+  const cloudSaved = await writeCloudConfig(updatedCloudConfig);
+
+  // 3. Persist to local backup file
+  writeBackupConfig(updatedCloudConfig);
+
+  console.log(
+    `[CMS:SAVE_DRAFT] Draft saved by ${profile.full_name} (${profile.email}). Cloud storage: ${
+      cloudSaved ? 'OK' : 'FALLBACK'
+    }`
+  );
 
   return { success: true };
 }
@@ -432,11 +653,17 @@ export async function publishLandingPageConfig(
 
   const changeSummary = generateChangeSummary(currentPublished, sanitized);
   const now = new Date().toISOString();
-  let nextVersion = 1;
 
+  // Load current cloud config or local backup to determine nextVersion
+  let currentConfig = await readCloudConfig();
+  if (!currentConfig) {
+    currentConfig = readBackupConfig();
+  }
+  const nextVersion = (currentConfig.version || 1) + 1;
+
+  // 1. Try DB table update
   try {
     const supabase = createAdminClient();
-
     const { data: configRow } = await supabase
       .from('homepage_configs' as any)
       .select('id, version')
@@ -444,7 +671,6 @@ export async function publishLandingPageConfig(
       .single();
 
     if (configRow) {
-      nextVersion = ((configRow as any).version || 1) + 1;
       await supabase
         .from('homepage_configs' as any)
         .update({
@@ -458,7 +684,6 @@ export async function publishLandingPageConfig(
         })
         .eq('key', 'main');
 
-      // Create version snapshot
       await supabase.from('homepage_versions' as any).insert({
         config_id: (configRow as any).id,
         version_number: nextVersion,
@@ -468,52 +693,30 @@ export async function publishLandingPageConfig(
         note: note || `Published v${nextVersion}`,
         change_summary: changeSummary,
       });
-    } else {
-      const { data: newRow } = await supabase
-        .from('homepage_configs' as any)
-        .insert({
-          key: 'main',
-          draft_data: sanitized,
-          published_data: sanitized,
-          published_at: now,
-          published_by: profile.id,
-          draft_updated_at: now,
-          draft_updated_by: profile.id,
-          version: 1,
-        })
-        .select('id')
-        .single();
-
-      if (newRow) {
-        await supabase.from('homepage_versions' as any).insert({
-          config_id: (newRow as any).id,
-          version_number: 1,
-          snapshot_data: sanitized,
-          published_by: profile.id,
-          published_at: now,
-          note: note || 'Initial landing page publish',
-          change_summary: ['Initial Publication'],
-        });
-      }
     }
   } catch (err) {
-    const backup = readBackupConfig();
-    nextVersion = backup.version + 1;
+    // DB table might not exist
   }
 
-  // Update backup store
-  const newBackup = {
+  // 2. Persist to Supabase Cloud Storage (Guaranteed cross-instance persistence on Vercel)
+  const publishedCloudData = {
     draft: sanitized,
     published: sanitized,
     published_at: now,
+    published_by: profile.id,
     published_by_name: profile.full_name,
     draft_updated_at: now,
+    draft_updated_by: profile.id,
     version: nextVersion,
   };
-  writeBackupConfig(newBackup);
+  const cloudSaved = await writeCloudConfig(publishedCloudData);
 
-  const existingVersions = readBackupVersions();
-  existingVersions.unshift({
+  // 3. Append to Cloud Versions
+  let versions = await readCloudVersions();
+  if (!versions || versions.length === 0) {
+    versions = readBackupVersions();
+  }
+  const newSnapshot: CmsVersionSnapshot = {
     id: `v-${Date.now()}`,
     version_number: nextVersion,
     snapshot_data: sanitized,
@@ -522,16 +725,29 @@ export async function publishLandingPageConfig(
     published_at: now,
     note: note || `Published v${nextVersion}`,
     change_summary: changeSummary,
-  });
-  writeBackupVersions(existingVersions);
+  };
+  versions.unshift(newSnapshot);
+  await writeCloudVersions(versions);
 
-  // Invalidate Next.js cache for root page
+  // 4. Update local backup files
+  writeBackupConfig(publishedCloudData);
+  writeBackupVersions(versions);
+
+  // 5. Invalidate Next.js cache for root page & magazines page
   try {
     const { revalidatePath } = await import('next/cache');
-    revalidatePath('/');
+    revalidatePath('/', 'page');
+    revalidatePath('/magazines', 'page');
+    console.log(`[CMS:CACHE_INVALIDATED] Successfully revalidated / and /magazines on publish`);
   } catch (e) {
     // Graceful fallback if invoked outside Next.js request context
   }
+
+  console.log(
+    `[CMS:PUBLISH] Successfully published v${nextVersion} by ${profile.full_name}. Cloud storage: ${
+      cloudSaved ? 'OK' : 'FALLBACK'
+    }`
+  );
 
   return { success: true, version: nextVersion };
 }
@@ -545,6 +761,7 @@ export async function restoreLandingPageVersion(
 ): Promise<{ success: boolean; version?: number; error?: string }> {
   let targetSnapshot: LandingPageConfig | null = null;
 
+  // 1. Try DB
   try {
     const supabase = createAdminClient();
     const { data: vRow } = await supabase
@@ -558,6 +775,16 @@ export async function restoreLandingPageVersion(
     }
   } catch (err) {}
 
+  // 2. Try Cloud Storage
+  if (!targetSnapshot) {
+    const cloudVersions = await readCloudVersions();
+    const found = cloudVersions.find(v => v.version_number === versionNumber);
+    if (found) {
+      targetSnapshot = found.snapshot_data;
+    }
+  }
+
+  // 3. Try Local Backup
   if (!targetSnapshot) {
     const backupVersions = readBackupVersions();
     const found = backupVersions.find(v => v.version_number === versionNumber);
@@ -587,7 +814,7 @@ export async function resetLandingPageToDefaults(
   profile: Profile
 ): Promise<{ success: boolean }> {
   await saveLandingPageDraft(DEFAULT_LANDING_PAGE_CONFIG, profile);
-  return { success: true };
+  return await publishLandingPageConfig(profile, 'Reset to factory defaults');
 }
 
 /**
@@ -637,6 +864,11 @@ export async function recordCmsMediaAsset(
     }
   } catch (err) {}
 
+  // Cloud storage media list
+  let cloudMedia = await readCloudMedia();
+  cloudMedia.unshift(newAsset);
+  await writeCloudMedia(cloudMedia);
+
   const existing = readBackupMedia();
   existing.unshift(newAsset);
   writeBackupMedia(existing);
@@ -651,6 +883,10 @@ export async function deleteCmsMediaAsset(id: string): Promise<boolean> {
     const supabase = createAdminClient();
     await supabase.from('cms_media' as any).delete().eq('id', id);
   } catch (err) {}
+
+  let cloudMedia = await readCloudMedia();
+  cloudMedia = cloudMedia.filter(m => m.id !== id);
+  await writeCloudMedia(cloudMedia);
 
   const existing = readBackupMedia();
   const filtered = existing.filter(m => m.id !== id);

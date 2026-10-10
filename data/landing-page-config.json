@@ -515,8 +515,10 @@
       "archive_manifesto"
     ]
   },
-  "published_at": "2026-10-10T19:05:22.149Z",
+  "published_at": "2026-10-10T19:43:03.246Z",
+  "published_by": "bfcdc65f-446f-4017-b506-d6c8de6e5a6f",
   "published_by_name": "Vedanth Gali",
-  "draft_updated_at": "2026-10-10T19:05:22.149Z",
-  "version": 1
+  "draft_updated_at": "2026-10-10T19:43:03.246Z",
+  "draft_updated_by": "bfcdc65f-446f-4017-b506-d6c8de6e5a6f",
+  "version": 5
 }

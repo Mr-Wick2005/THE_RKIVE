@@ -36,8 +36,10 @@ export function InteractivePreview({
   // Resolve magazines for preview
   const resolvedMagazines = React.useMemo(() => {
     const all = studioData.available_magazines || [];
-    if (recent_releases.mode === 'manual' && recent_releases.featured_magazine_ids?.length > 0) {
-      const selected = recent_releases.featured_magazine_ids
+    if (recent_releases.mode === 'manual') {
+      const selectedIds = recent_releases.featured_magazine_ids || [];
+      if (selectedIds.length === 0) return [];
+      const selected = selectedIds
         .map((id) => all.find((m) => m.id === id))
         .filter(Boolean) as typeof all;
       return selected.slice(0, recent_releases.max_items || 4);
@@ -48,8 +50,10 @@ export function InteractivePreview({
   // Resolve departments for preview
   const resolvedDepartments = React.useMemo(() => {
     const all = studioData.available_departments || [];
-    if (departments_showcase.mode === 'manual' && departments_showcase.featured_department_ids?.length > 0) {
-      const selected = departments_showcase.featured_department_ids
+    if (departments_showcase.mode === 'manual') {
+      const selectedIds = departments_showcase.featured_department_ids || [];
+      if (selectedIds.length === 0) return [];
+      const selected = selectedIds
         .map((id) => all.find((d) => d.id === id))
         .filter(Boolean) as typeof all;
       return selected.slice(0, departments_showcase.max_items || 8);
