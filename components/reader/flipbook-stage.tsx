@@ -280,11 +280,14 @@ export const FlipbookStage = forwardRef<FlipbookStageRef, FlipbookStageProps>(fu
     }
   }, [pages, baseWidth, baseHeight, isZoomed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Preload adjacent high-res images around current page
+  // Track already preloaded URLs to avoid redundant image network requests
+  const preloadedUrlsRef = useRef<Set<string>>(new Set());
+
+  // Preload adjacent high-res images around current active spread
   useEffect(() => {
     if (!pages || pages.length === 0) return;
 
-    let activeIndex = Math.max(0, Math.min(pages.length - 1, initialPage - 1));
+    let activeIndex = Math.max(0, Math.min(pages.length - 1, fallbackPage - 1));
     if (isReady && isEngineReadyRef.current && pageFlipRef.current) {
       try {
         const pageIdx = pageFlipRef.current.getCurrentPageIndex();
@@ -296,23 +299,23 @@ export const FlipbookStage = forwardRef<FlipbookStageRef, FlipbookStageProps>(fu
       }
     }
 
+    // Bounded preload spread: previous 1 page, current 2 pages, next 2 pages
     const indicesToPreload = [
-      activeIndex - 2,
       activeIndex - 1,
       activeIndex,
       activeIndex + 1,
       activeIndex + 2,
-      activeIndex + 3,
     ].filter((idx) => idx >= 0 && idx < pages.length);
 
     indicesToPreload.forEach((idx) => {
       const page = pages[idx];
-      if (page?.image_path) {
+      if (page?.image_path && !preloadedUrlsRef.current.has(page.image_path)) {
+        preloadedUrlsRef.current.add(page.image_path);
         const img = new Image();
         img.src = page.image_path;
       }
     });
-  }, [isReady, initialPage, pages]);
+  }, [isReady, fallbackPage, pages]);
 
   const currentPageObj = pages[fallbackPage - 1] || pages[0];
 

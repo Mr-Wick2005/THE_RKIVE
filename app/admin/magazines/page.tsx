@@ -8,6 +8,7 @@ import { AdminPublicationsHeader } from '@/components/admin/admin-publications-h
 import { PublicationTable } from '@/components/admin/publication-table';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AdminMagazinesListPage() {
   const router = useRouter();
@@ -61,45 +62,45 @@ export default function AdminMagazinesListPage() {
     }
   }, [profile, token, isLoading, router, loadMagazines]);
 
-  // Auto-poll and drive background chunk processing when any publication is queued or processing
+  // Autonomous Realtime updates & gentle fallback status refresh (does not drive processing from browser)
   useEffect(() => {
+    if (!token) return;
+
+    // 1. Supabase Realtime subscription for instant progress updates
+    const supabase = createClient();
+    const channel = supabase
+      .channel('admin-magazines-status')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'magazines' },
+        () => {
+          loadMagazines(token);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pdf_processing_jobs' },
+        () => {
+          loadMagazines(token);
+        }
+      )
+      .subscribe();
+
+    // 2. Gentle fallback poll (15s) only if active publications are being processed
     const activeMagazines = (data?.magazines || []).filter(
       (m: any) => m.processing_status === 'PROCESSING' || m.processing_status === 'QUEUED'
     );
 
-    if (activeMagazines.length === 0 || !token) return;
-
-    let isCancelled = false;
-
-    // Step processor to drive chunk progress across serverless environments
-    const driveChunkProcessing = async () => {
-      for (const mag of activeMagazines) {
-        if (isCancelled) break;
-        try {
-          await fetch('/api/admin/data', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ action: 'process-step', id: mag.id, maxPages: 4 }),
-          });
-        } catch {
-          // Non-blocking step failure handled by server status
-        }
-      }
-      if (!isCancelled) {
+    let fallbackTimer: NodeJS.Timeout | null = null;
+    if (activeMagazines.length > 0) {
+      fallbackTimer = setInterval(() => {
         loadMagazines(token);
-      }
-    };
-
-    const interval = setInterval(() => {
-      driveChunkProcessing();
-    }, 2500);
+      }, 15000);
+    }
 
     return () => {
-      isCancelled = true;
-      clearInterval(interval);
+      supabase.removeChannel(channel);
+      if (fallbackTimer) clearInterval(fallbackTimer);
     };
   }, [data?.magazines, token, loadMagazines]);
 

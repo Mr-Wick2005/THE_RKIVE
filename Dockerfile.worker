@@ -1,0 +1,46 @@
+# ==============================================================================
+# THE RKIVE — DEDICATED PDF PROCESSING WORKER DOCKERFILE
+# Node 20/24 LTS Alpine with Cairo/Pango/GLib Skia dependencies for Sharp & Canvas
+# ==============================================================================
+
+FROM node:20-bookworm-slim AS base
+
+WORKDIR /app
+
+# Install native dependencies required by @napi-rs/canvas and sharp
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libglib2.0-0 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libgif7 \
+    librsvg2-2 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package descriptors
+COPY package*.json ./
+
+# Install dependencies (including devDependencies needed for tsx execution)
+RUN npm ci --prefer-offline
+
+# Copy application source code
+COPY . .
+
+# Environment variables
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV WORKER_BATCH_SIZE=8
+ENV PDF_CACHE_DIR=/app/scratch/pdf-cache
+
+# Expose health check port
+EXPOSE 3001
+
+# Run health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3001/healthz', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+# Start the dedicated worker daemon
+CMD ["npx", "tsx", "services/worker/index.ts"]

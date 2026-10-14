@@ -1,6 +1,7 @@
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient } from '../supabase/admin';
 import { processMagazinePdf, ProcessMagazineResult } from './pipeline';
-import { PdfProcessingJob } from '@/types/magazine';
+import { QUEUE_CONFIG } from '../config/upload-limits';
+import { PdfProcessingJob } from '../../types/magazine';
 
 export interface ProcessQueueResult {
   hasJob: boolean;
@@ -8,6 +9,18 @@ export interface ProcessQueueResult {
   magazineId?: string;
   result?: ProcessMagazineResult;
   error?: string;
+  errorType?: 'PERMANENT' | 'TRANSIENT';
+}
+
+/**
+ * Calculates bounded exponential backoff with randomized jitter
+ */
+export function calculateBackoffDelayMs(attempts: number): number {
+  const base = QUEUE_CONFIG.BASE_BACKOFF_MS;
+  const max = QUEUE_CONFIG.MAX_BACKOFF_MS;
+  const exponential = Math.min(max, base * Math.pow(2, Math.max(0, attempts - 1)));
+  const jitter = Math.floor(Math.random() * 1000);
+  return Math.min(max, exponential + jitter);
 }
 
 /**
@@ -52,13 +65,17 @@ export function isValidWorkerSecret(authHeader: string | null, customHeader?: st
 /**
  * Atomically claims the next available queued job in PostgreSQL
  */
-export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessingJob | null> {
+export async function claimNextQueuedJob(
+  workerId: string,
+  leaseSeconds: number = 120
+): Promise<PdfProcessingJob | null> {
   const supabase = createAdminClient();
 
   try {
-    // 1. Try atomic PostgreSQL RPC function if migration has run
+    // 1. Try atomic PostgreSQL RPC function with heartbeat & lease expiry
     const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('claim_next_pdf_job', {
       p_worker_id: workerId,
+      p_lease_seconds: leaseSeconds,
     });
 
     if (!rpcError && rpcData && rpcData.length > 0) {
@@ -70,16 +87,17 @@ export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessin
 
   // 2. Direct atomic claim fallback
   try {
+    const staleThreshold = new Date(Date.now() - leaseSeconds * 1000).toISOString();
     const { data: candidate } = await (supabase
       .from('pdf_processing_jobs') as any)
       .select('id, attempts, max_attempts')
-      .or('status.eq.QUEUED,and(status.eq.PROCESSING,locked_at.lt.' + new Date(Date.now() - 2 * 60 * 1000).toISOString() + ')')
+      .or(`status.eq.QUEUED,and(status.eq.PROCESSING,locked_at.lt.${staleThreshold})`)
       .lte('available_at', new Date().toISOString())
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
 
-    if (!candidate || candidate.attempts >= candidate.max_attempts) {
+    if (!candidate || candidate.attempts >= (candidate.max_attempts || QUEUE_CONFIG.MAX_ATTEMPTS)) {
       return null;
     }
 
@@ -88,6 +106,7 @@ export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessin
       .update({
         status: 'PROCESSING',
         locked_at: new Date().toISOString(),
+        heartbeat_at: new Date().toISOString(),
         locked_by: workerId,
         attempts: (candidate.attempts || 0) + 1,
         updated_at: new Date().toISOString(),
@@ -102,10 +121,10 @@ export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessin
 
     return claimed as PdfProcessingJob;
   } catch (err) {
-    console.error('[PDF_QUEUE] Error claiming next job from queue table, falling back to magazines table:', err);
+    console.error('[PDF_QUEUE] Error claiming next job from queue table:', err);
   }
 
-  // 3. Fallback: claim directly from magazines table if pdf_processing_jobs table not yet migrated
+  // 3. Fallback directly from magazines table if pdf_processing_jobs not present
   try {
     const { data: mag } = await (supabase
       .from('magazines') as any)
@@ -125,7 +144,7 @@ export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessin
         magazine_id: mag.id,
         status: 'PROCESSING',
         attempts: 1,
-        max_attempts: 5,
+        max_attempts: QUEUE_CONFIG.MAX_ATTEMPTS,
         available_at: new Date().toISOString(),
         locked_at: new Date().toISOString(),
         locked_by: workerId,
@@ -146,7 +165,8 @@ export async function claimNextQueuedJob(workerId: string): Promise<PdfProcessin
  */
 export async function claimSpecificMagazineJob(
   magazineId: string,
-  workerId: string
+  workerId: string,
+  leaseSeconds: number = 120
 ): Promise<PdfProcessingJob | null> {
   const supabase = createAdminClient();
 
@@ -154,6 +174,7 @@ export async function claimSpecificMagazineJob(
     const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('claim_magazine_pdf_job', {
       p_magazine_id: magazineId,
       p_worker_id: workerId,
+      p_lease_seconds: leaseSeconds,
     });
 
     if (!rpcError && rpcData && rpcData.length > 0) {
@@ -172,27 +193,23 @@ export async function claimSpecificMagazineJob(
       .limit(1)
       .maybeSingle();
 
-    if (candErr) {
-      throw candErr;
-    }
+    if (candErr) throw candErr;
 
     if (!candidate) {
-      // If no job record exists yet, create and claim it
       const { data: inserted, error: insertErr } = await (supabase
         .from('pdf_processing_jobs') as any)
         .insert({
           magazine_id: magazineId,
           status: 'PROCESSING',
           locked_at: new Date().toISOString(),
+          heartbeat_at: new Date().toISOString(),
           locked_by: workerId,
           attempts: 1,
         })
         .select('*')
         .single();
 
-      if (insertErr || !inserted) {
-        throw insertErr || new Error('Insert failed');
-      }
+      if (insertErr || !inserted) throw insertErr || new Error('Insert failed');
       return inserted as PdfProcessingJob;
     }
 
@@ -201,6 +218,7 @@ export async function claimSpecificMagazineJob(
       .update({
         status: 'PROCESSING',
         locked_at: new Date().toISOString(),
+        heartbeat_at: new Date().toISOString(),
         locked_by: workerId,
         attempts: (candidate.attempts || 0) + 1,
         updated_at: new Date().toISOString(),
@@ -212,7 +230,6 @@ export async function claimSpecificMagazineJob(
     if (claimErr || !claimed) return null;
     return claimed as PdfProcessingJob;
   } catch (err) {
-    // Fallback directly to magazines table if pdf_processing_jobs table is missing
     try {
       const { data: mag } = await (supabase
         .from('magazines') as any)
@@ -226,7 +243,7 @@ export async function claimSpecificMagazineJob(
           magazine_id: mag.id,
           status: 'PROCESSING',
           attempts: 1,
-          max_attempts: 5,
+          max_attempts: QUEUE_CONFIG.MAX_ATTEMPTS,
           available_at: new Date().toISOString(),
           locked_at: new Date().toISOString(),
           locked_by: workerId,
@@ -235,16 +252,14 @@ export async function claimSpecificMagazineJob(
           updated_at: new Date().toISOString(),
         };
       }
-    } catch (magFallbackErr) {
-      console.warn(`[PDF_QUEUE] Fallback error for magazine ${magazineId}:`, magFallbackErr);
-    }
+    } catch {}
     return null;
   }
 }
 
 /**
  * Dispatches an asynchronous internal HTTP trigger to the worker endpoint
- * so the next chunk executes automatically in a new serverless container.
+ * for serverless self-continuation.
  */
 export function dispatchWorkerContinuation(magazineId?: string): void {
   const baseUrl = getInternalWorkerBaseUrl();
@@ -253,7 +268,6 @@ export function dispatchWorkerContinuation(magazineId?: string): void {
 
   console.log(`[PDF_JOB] CONTINUATION_DISPATCH url=${workerUrl} target_magazine=${magazineId || 'any'}`);
 
-  // Non-blocking fire-and-forget fetch with short abort controller
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
@@ -281,7 +295,6 @@ export function dispatchWorkerContinuation(magazineId?: string): void {
       })
       .catch((err) => {
         clearTimeout(timeoutId);
-        // Abort / background disconnect is expected for fire-and-forget
         console.log(`[PDF_JOB] CONTINUATION_SENT (${err.name === 'AbortError' ? 'dispatched' : err.message})`);
       });
   } catch (err) {
@@ -290,14 +303,16 @@ export function dispatchWorkerContinuation(magazineId?: string): void {
 }
 
 /**
- * Main queue consumer function: Claims next job, processes 4 pages,
- * and if pages remain, triggers autonomous continuation independently of any browser.
+ * Main queue consumer function: Claims next job, processes pages,
+ * and if pages remain, triggers continuation.
  */
-export async function consumeNextPdfJob(targetMagazineId?: string): Promise<ProcessQueueResult> {
-  const workerId = `worker-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now()}`;
+export async function consumeNextPdfJob(
+  targetMagazineId?: string,
+  options?: { maxPagesPerRun?: number; workerId?: string }
+): Promise<ProcessQueueResult> {
+  const workerId = options?.workerId || `worker-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now()}`;
   console.log(`[PDF_QUEUE] CONSUME_START worker_id=${workerId} target_magazine=${targetMagazineId || 'next_in_queue'}`);
 
-  // 1. Atomically claim job
   const job = targetMagazineId
     ? await claimSpecificMagazineJob(targetMagazineId, workerId)
     : await claimNextQueuedJob(workerId);
@@ -311,21 +326,47 @@ export async function consumeNextPdfJob(targetMagazineId?: string): Promise<Proc
   console.log(`[PDF_QUEUE] JOB_ACTIVE job_id=${job.id} publication_id=${magazineId} attempt=${job.attempts}`);
 
   try {
-    // 2. Process exactly 1 chunk (4 pages)
     const result = await processMagazinePdf(magazineId, {
-      maxPagesPerRun: 4,
+      maxPagesPerRun: options?.maxPagesPerRun || 4,
+      workerId,
     });
 
-    // 3. Check if more pages remain
     if (result.success && !result.completed && (result.remainingPages || 0) > 0) {
       console.log(
         `[PDF_QUEUE] CHUNK_PROCESSED publication_id=${magazineId} remaining=${result.remainingPages} -> DISPATCHING_NEXT_CHUNK`
       );
-
-      // Trigger next chunk asynchronously in background
       dispatchWorkerContinuation(magazineId);
     } else if (result.completed) {
       console.log(`[PDF_QUEUE] JOB_COMPLETED_SUCCESSFULLY publication_id=${magazineId} total_pages=${result.pageCount}`);
+    } else if (!result.success) {
+      // Apply exponential backoff with jitter for transient retries
+      const delayMs = calculateBackoffDelayMs(job.attempts || 1);
+      const delaySec = Math.ceil(delayMs / 1000);
+      const supabase = createAdminClient();
+
+      try {
+        await (supabase.rpc as any)('release_pdf_job', {
+          p_job_id: job.id,
+          p_worker_id: workerId,
+          p_status: result.errorType === 'PERMANENT' ? 'FAILED' : 'QUEUED',
+          p_error: result.error || 'Processing failed',
+          p_error_type: result.errorType || 'TRANSIENT',
+          p_is_terminal: result.errorType === 'PERMANENT',
+          p_retry_delay_seconds: result.errorType === 'PERMANENT' ? 0 : delaySec,
+        });
+      } catch {
+        await (supabase.from('pdf_processing_jobs') as any)
+          .update({
+            status: result.errorType === 'PERMANENT' ? 'FAILED' : 'QUEUED',
+            locked_at: null,
+            locked_by: null,
+            last_error: result.error,
+            error_type: result.errorType,
+            is_terminal: result.errorType === 'PERMANENT',
+            available_at: new Date(Date.now() + (result.errorType === 'PERMANENT' ? 0 : delayMs)).toISOString(),
+          })
+          .eq('id', job.id);
+      }
     }
 
     return {
@@ -333,6 +374,8 @@ export async function consumeNextPdfJob(targetMagazineId?: string): Promise<Proc
       jobId: job.id,
       magazineId,
       result,
+      error: result.error,
+      errorType: result.errorType,
     };
   } catch (err: any) {
     console.error(`[PDF_QUEUE] JOB_FAILED publication_id=${magazineId} error=${err.message}`);
@@ -341,6 +384,7 @@ export async function consumeNextPdfJob(targetMagazineId?: string): Promise<Proc
       jobId: job.id,
       magazineId,
       error: err.message,
+      errorType: 'TRANSIENT',
     };
   }
 }

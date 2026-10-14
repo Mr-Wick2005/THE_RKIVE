@@ -18,6 +18,7 @@ import {
   retryMagazineProcessingAction,
 } from '@/app/actions/magazines';
 import { slugify, formatDate } from '@/lib/utils';
+import { STORAGE_LIMITS } from '@/lib/config/upload-limits';
 import {
   Building2,
   Save,
@@ -311,19 +312,20 @@ export function PublicationForm({
 
           if (!putRes.ok) {
             let errorDetail = `Direct storage upload failed with HTTP ${putRes.status}`;
+            const maxMb = Math.round(STORAGE_LIMITS.MAX_PDF_SIZE_BYTES / (1024 * 1024));
             try {
               const errText = await putRes.text();
               const parsed = JSON.parse(errText);
               if (parsed.error === 'Payload too large' || parsed.statusCode === '413' || parsed.code === 'EntityTooLarge' || putRes.status === 400 || putRes.status === 413) {
                 const fileSizeMb = (pdfFile.size / (1024 * 1024)).toFixed(2);
-                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage 50 MB platform limit. Please compress or optimize the PDF to under 50 MB before uploading.`;
+                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage ${maxMb} MB configured limit. Please compress or optimize the PDF to under ${maxMb} MB before uploading.`;
               } else if (parsed.message || parsed.error) {
                 errorDetail = `${parsed.message || parsed.error} (HTTP ${putRes.status})`;
               }
             } catch {
-              if (pdfFile.size > 50 * 1024 * 1024) {
+              if (pdfFile.size > STORAGE_LIMITS.MAX_PDF_SIZE_BYTES) {
                 const fileSizeMb = (pdfFile.size / (1024 * 1024)).toFixed(2);
-                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage 50 MB platform limit. Please compress or optimize the PDF to under 50 MB before uploading.`;
+                errorDetail = `File size (${fileSizeMb} MB) exceeds the Supabase Storage ${maxMb} MB limit. Please compress or optimize the PDF before uploading.`;
               }
             }
             throw new Error(errorDetail);

@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  pdf-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - '3001:3001'
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - WORKER_BATCH_SIZE=8
+      - WORKER_POLL_INTERVAL_MS=3000
+      - PDF_CACHE_DIR=/app/scratch/pdf-cache
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M

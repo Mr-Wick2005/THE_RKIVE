@@ -1,17 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
+import { STORAGE_LIMITS } from '@/lib/config/upload-limits';
 
-export const MAX_COVER_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-export const MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB (Supabase Storage standard limit)
+export const MAX_COVER_SIZE_BYTES = STORAGE_LIMITS.MAX_COVER_SIZE_BYTES;
+export const MAX_PDF_SIZE_BYTES = STORAGE_LIMITS.MAX_PDF_SIZE_BYTES;
 
-export const ALLOWED_COVER_MIME_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-];
-
-export const ALLOWED_PDF_MIME_TYPES = ['application/pdf'];
+export const ALLOWED_COVER_MIME_TYPES = [...STORAGE_LIMITS.ALLOWED_COVER_MIME_TYPES] as string[];
+export const ALLOWED_PDF_MIME_TYPES = [...STORAGE_LIMITS.ALLOWED_PDF_MIME_TYPES] as string[];
 
 export interface FileValidationResult {
   valid: boolean;
@@ -25,7 +20,7 @@ export function validateCoverFile(file: File | { name?: string; type?: string; s
   const fileName = file?.name?.toLowerCase() || '';
   const fileType = file?.type?.toLowerCase() || '';
   const isCoverMime = ALLOWED_COVER_MIME_TYPES.includes(fileType);
-  const isCoverExt = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.webp');
+  const isCoverExt = STORAGE_LIMITS.ALLOWED_COVER_EXTENSIONS.some((ext) => fileName.endsWith(ext));
 
   if (!isCoverMime && !isCoverExt) {
     return {
@@ -36,9 +31,10 @@ export function validateCoverFile(file: File | { name?: string; type?: string; s
 
   if (file.size && file.size > MAX_COVER_SIZE_BYTES) {
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    const maxMb = (MAX_COVER_SIZE_BYTES / (1024 * 1024)).toFixed(0);
     return {
       valid: false,
-      error: `Cover image size (${sizeMb} MB) exceeds the 10 MB limit.`,
+      error: `Cover image size (${sizeMb} MB) exceeds the ${maxMb} MB limit.`,
     };
   }
 
@@ -51,7 +47,7 @@ export function validateCoverFile(file: File | { name?: string; type?: string; s
 export function validatePdfFile(file: File | { name?: string; type?: string; size?: number }): FileValidationResult {
   const fileName = file?.name?.toLowerCase() || '';
   const fileType = file?.type?.toLowerCase() || '';
-  const isPdfMime = fileType === 'application/pdf' || fileType === 'application/x-pdf' || fileType === 'application/octet-stream';
+  const isPdfMime = ALLOWED_PDF_MIME_TYPES.includes(fileType);
   const isPdfExtension = fileName.endsWith('.pdf');
 
   if (!isPdfMime && !isPdfExtension) {
@@ -62,10 +58,11 @@ export function validatePdfFile(file: File | { name?: string; type?: string; siz
   }
 
   if (file.size && file.size > MAX_PDF_SIZE_BYTES) {
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    const maxMb = (MAX_PDF_SIZE_BYTES / (1024 * 1024)).toFixed(0);
     return {
       valid: false,
-      error: `PDF document size (${sizeMb} MB) exceeds the 50 MB limit enforced by Supabase Storage. Please compress your PDF before uploading.`,
+      error: `PDF document size (${sizeMb} MB) exceeds the configured ${maxMb} MB platform limit. Please optimize the PDF or split it before uploading.`,
     };
   }
 

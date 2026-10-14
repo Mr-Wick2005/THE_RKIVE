@@ -3,6 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { FileText, Upload, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { validatePdfFile } from '@/lib/storage/upload';
+import { STORAGE_LIMITS } from '@/lib/config/upload-limits';
 import { cn } from '@/lib/utils';
 
 interface PdfUploaderProps {
@@ -20,6 +21,8 @@ export function PdfUploader({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const maxMb = Math.round(STORAGE_LIMITS.MAX_PDF_SIZE_BYTES / (1024 * 1024));
 
   const handleFile = (file: File) => {
     const validation = validatePdfFile(file);
@@ -80,7 +83,7 @@ export function PdfUploader({
           Publication Document (Original PDF)
         </label>
         <span className="text-[10px] font-mono text-[#77736C]">
-          PDF format only (Max 50 MB)
+          PDF format only (Max {maxMb} MB)
         </span>
       </div>
 
@@ -158,7 +161,7 @@ export function PdfUploader({
                 Click to browse or drag & drop publication PDF
               </p>
               <p className="text-[11px] text-[#77736C]">
-                Restricted college archive storage • Max 50 MB
+                Restricted college archive storage • Max {maxMb} MB
               </p>
             </div>
           </div>

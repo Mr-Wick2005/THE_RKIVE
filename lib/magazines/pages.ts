@@ -18,7 +18,7 @@ export async function getMagazinePages(magazineId: string): Promise<MagazinePage
         const supabase = createClient();
         const { data, error } = await (supabase
           .from('magazine_pages') as any)
-          .select('*')
+          .select('id, magazine_id, page_number, image_path, thumbnail_path, width, height, file_size, mime_type, render_version')
           .eq('magazine_id', magazineId)
           .order('page_number', { ascending: true });
 
@@ -47,7 +47,7 @@ export async function getMagazinePage(
   const supabase = createClient();
   const { data, error } = await (supabase
     .from('magazine_pages') as any)
-    .select('*')
+    .select('id, magazine_id, page_number, image_path, thumbnail_path, width, height, file_size, mime_type, render_version')
     .eq('magazine_id', magazineId)
     .eq('page_number', pageNumber)
     .single();

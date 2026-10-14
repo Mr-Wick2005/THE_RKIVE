@@ -81,6 +81,8 @@ export interface RenderedPage {
   mimeType: 'image/webp';
 }
 
+import { PIPELINE_CONFIG } from '../config/upload-limits';
+
 export interface RenderOptions {
   /**
    * Scale factor for rasterization.
@@ -158,11 +160,11 @@ export async function renderSinglePdfPage(
   options: RenderOptions = {}
 ): Promise<RenderedPage> {
   const {
-    scale = 2.0,
-    pageQuality = 86,
-    pageEffort = 3,
-    thumbnailWidth = 360,
-    thumbnailQuality = 80,
+    scale = PIPELINE_CONFIG.DEFAULT_SCALE,
+    pageQuality = PIPELINE_CONFIG.DEFAULT_PAGE_QUALITY,
+    pageEffort = PIPELINE_CONFIG.DEFAULT_PAGE_EFFORT,
+    thumbnailWidth = PIPELINE_CONFIG.DEFAULT_THUMBNAIL_WIDTH,
+    thumbnailQuality = PIPELINE_CONFIG.DEFAULT_THUMBNAIL_QUALITY,
   } = options;
 
   const page = await pdfDoc.getPage(pageNum);
@@ -170,6 +172,10 @@ export async function renderSinglePdfPage(
 
   const width = Math.floor(viewport.width);
   const height = Math.floor(viewport.height);
+
+  if (width <= 0 || height <= 0 || width > 12000 || height > 12000) {
+    throw new Error(`Invalid page ${pageNum} raster dimensions: ${width}x${height}`);
+  }
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
@@ -188,6 +194,9 @@ export async function renderSinglePdfPage(
 
   // Extract raw pixel buffer directly from napi-rs canvas (bypasses PNG encoding overhead)
   const rawData = canvas.data();
+
+  // Explicitly destroy native canvas & reset context immediately to release native Skia memory
+  canvasFactory.destroy({ canvas, context: ctx });
 
   // Convert & optimize to high-fidelity WebP using Sharp directly from raw BGRA/RGBA pixels
   const optimizedWebpBuffer = await sharp(rawData, {
