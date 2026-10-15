@@ -46,8 +46,8 @@ async function run() {
     console.log(`  ✓ Homepage returned HTTP 200 (${(html.length / 1024).toFixed(1)} KB)`);
     passed++;
 
-    // Check for R2 CDN images
-    const r2Images = [...html.matchAll(/https:\/\/pub-bfa4d9882894424eb07a99c4f913fd46\.r2\.dev\/[^\s\"\'\<\>]+/g)].map(m => m[0]);
+    // Check for R2 CDN images (strip trailing backslashes or quotes from HTML/JSON escape)
+    const r2Images = [...html.matchAll(/https:\/\/pub-bfa4d9882894424eb07a99c4f913fd46\.r2\.dev\/[^\s\"\'\<\>\\]+/g)].map(m => m[0].replace(/\\+$/, ''));
     console.log(`  ✓ Found ${r2Images.length} direct R2 CDN URLs in live page markup`);
     if (r2Images.length > 0) {
       passed++;
