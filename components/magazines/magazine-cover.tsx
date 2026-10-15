@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { MagazineWithRelations } from '@/types/magazine';
 import { BookOpen, Sparkles } from 'lucide-react';
+import { getCoverUrl } from '@/lib/storage/urls';
 
 interface MagazineCoverProps {
   magazine: MagazineWithRelations;
@@ -102,7 +103,7 @@ export function MagazineCover({
       {cover_image_url ? (
         <div className="relative w-full h-full">
           <Image
-            src={cover_image_url}
+            src={getCoverUrl(cover_image_url)}
             alt={`${title} Cover`}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

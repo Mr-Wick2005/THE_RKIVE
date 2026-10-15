@@ -7,6 +7,7 @@ import { ReaderHeader } from '@/components/reader/reader-header';
 import { ReaderToolbar } from '@/components/reader/reader-toolbar';
 import { FlipbookStage, FlipbookStageRef } from '@/components/reader/flipbook-stage';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { getCoverUrl } from '@/lib/storage/urls';
 
 interface DigitalMagazineReaderProps {
   magazine: MagazineWithRelations;
@@ -26,8 +27,8 @@ export function DigitalMagazineReader({
         id: `mock-page-${i + 1}`,
         magazine_id: magazine.id,
         page_number: i + 1,
-        image_path: magazine.cover_image_url || '/placeholder-cover.jpg',
-        thumbnail_path: magazine.cover_image_url || '/placeholder-cover.jpg',
+        image_path: getCoverUrl(magazine.cover_image_url) || '/placeholder-cover.jpg',
+        thumbnail_path: getCoverUrl(magazine.cover_image_url) || '/placeholder-cover.jpg',
         width: 1200,
         height: 1697,
         file_size: 150000,

@@ -184,3 +184,86 @@ GRANT EXECUTE ON FUNCTION public.claim_next_pdf_job(TEXT, INT) TO postgres, auth
 GRANT EXECUTE ON FUNCTION public.claim_magazine_pdf_job(UUID, TEXT, INT) TO postgres, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.heartbeat_pdf_job(UUID, TEXT, INT, INT) TO postgres, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.release_pdf_job(UUID, TEXT, TEXT, TEXT, TEXT, BOOLEAN, INT) TO postgres, authenticated, service_role;
+
+-- 7. Hardened pg_cron trigger function with heartbeat-awareness (prevents overlapping worker executions)
+CREATE OR REPLACE FUNCTION public.trigger_pdf_worker_cron(
+  p_worker_url text DEFAULT 'https://the-rkive.vercel.app/api/worker/pdf-process'
+)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, net, vault
+AS $$
+DECLARE
+  v_request_id bigint;
+  v_has_pending_jobs boolean := false;
+  v_secret text := NULL;
+BEGIN
+  -- Step 1: Check if any non-terminal jobs are QUEUED or genuinely stalled (> 2 minutes without heartbeat)
+  BEGIN
+    SELECT EXISTS (
+      SELECT 1 FROM public.pdf_processing_jobs
+      WHERE is_terminal = false
+        AND (
+          (status = 'QUEUED' AND available_at <= NOW() AND attempts < max_attempts)
+          OR (status = 'PROCESSING' AND COALESCE(heartbeat_at, locked_at) < NOW() - INTERVAL '2 minutes' AND attempts < max_attempts)
+        )
+    ) INTO v_has_pending_jobs;
+  EXCEPTION WHEN OTHERS THEN
+    BEGIN
+      SELECT EXISTS (
+        SELECT 1 FROM public.magazines
+        WHERE processing_status IN ('QUEUED', 'PROCESSING')
+      ) INTO v_has_pending_jobs;
+    EXCEPTION WHEN OTHERS THEN
+      v_has_pending_jobs := false;
+    END;
+  END;
+
+  -- Step 2: If no work is pending, exit immediately without network overhead
+  IF v_has_pending_jobs IS NOT TRUE THEN
+    RETURN 0;
+  END IF;
+
+  -- Step 3: Retrieve PDF_WORKER_SECRET from Supabase Vault
+  BEGIN
+    SELECT decrypted_secret
+    INTO v_secret
+    FROM vault.decrypted_secrets
+    WHERE name = 'pdf_worker_secret'
+    ORDER BY created_at DESC
+    LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    v_secret := NULL;
+  END;
+
+  -- If vault is not configured or secret is missing, exit cleanly
+  IF v_secret IS NULL OR length(trim(v_secret)) = 0 THEN
+    RETURN 0;
+  END IF;
+
+  -- Step 4: Dispatch non-blocking HTTP POST via pg_net
+  BEGIN
+    SELECT net.http_post(
+      url := p_worker_url,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || v_secret,
+        'x-worker-secret', v_secret
+      ),
+      body := jsonb_build_object(
+        'source', 'supabase_pg_cron',
+        'dispatched_at', EXTRACT(EPOCH FROM NOW())::text
+      ),
+      timeout_milliseconds := 5000
+    ) INTO v_request_id;
+  EXCEPTION WHEN OTHERS THEN
+    v_request_id := 0;
+  END;
+
+  RETURN v_request_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.trigger_pdf_worker_cron(text) TO postgres, service_role;
+

@@ -41,14 +41,17 @@ function createPageDomElement(page: MagazinePage, index: number, total: number):
   const innerEl = document.createElement('div');
   innerEl.className = 'flip-page-inner relative w-full h-full bg-white overflow-hidden shadow-sm';
 
-  // Page Image
+  // Page Image: Initial spread loads full-res; distant pages load tiny thumbnail (~3KB) until within flip window
+  const isInitialSpread = index < 4;
   const imgEl = document.createElement('img');
-  imgEl.src = page.image_path;
+  imgEl.src = isInitialSpread ? page.image_path : (page.thumbnail_path || page.image_path);
+  imgEl.dataset.fullSrc = page.image_path;
+  imgEl.dataset.pageIndex = String(index);
   imgEl.alt = `Page ${page.page_number}`;
-  imgEl.loading = index < 4 ? 'eager' : 'lazy';
+  imgEl.loading = isInitialSpread ? 'eager' : 'lazy';
   imgEl.decoding = 'async';
   imgEl.draggable = false;
-  imgEl.className = 'w-full h-full object-contain pointer-events-none select-none';
+  imgEl.className = 'w-full h-full object-contain pointer-events-none select-none flip-page-img';
   innerEl.appendChild(imgEl);
 
   // Center Book Spine Shadow Overlay for Inner Pages
@@ -299,20 +302,35 @@ export const FlipbookStage = forwardRef<FlipbookStageRef, FlipbookStageProps>(fu
       }
     }
 
-    // Bounded preload spread: previous 1 page, current 2 pages, next 2 pages
+    // Bounded preload spread: previous 2 pages, current 2 pages, next 2 pages
     const indicesToPreload = [
+      activeIndex - 2,
       activeIndex - 1,
       activeIndex,
       activeIndex + 1,
       activeIndex + 2,
+      activeIndex + 3,
     ].filter((idx) => idx >= 0 && idx < pages.length);
 
     indicesToPreload.forEach((idx) => {
       const page = pages[idx];
-      if (page?.image_path && !preloadedUrlsRef.current.has(page.image_path)) {
-        preloadedUrlsRef.current.add(page.image_path);
-        const img = new Image();
-        img.src = page.image_path;
+      if (page?.image_path) {
+        // 1. Prefetch into browser cache
+        if (!preloadedUrlsRef.current.has(page.image_path)) {
+          preloadedUrlsRef.current.add(page.image_path);
+          const img = new Image();
+          img.src = page.image_path;
+        }
+
+        // 2. Just-in-time upgrade of DOM element src to full-res WebP
+        if (containerRef.current) {
+          const domImg = containerRef.current.querySelector<HTMLImageElement>(
+            `img[data-page-index="${idx}"]`
+          );
+          if (domImg && domImg.src !== page.image_path) {
+            domImg.src = page.image_path;
+          }
+        }
       }
     });
   }, [isReady, fallbackPage, pages]);

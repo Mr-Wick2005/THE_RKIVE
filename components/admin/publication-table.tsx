@@ -304,6 +304,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                                 src={mag.cover_image_url}
                                 alt=""
                                 fill
+                                sizes="48px"
                                 className="object-cover"
                               />
                             ) : (

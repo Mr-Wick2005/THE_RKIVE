@@ -86,15 +86,31 @@ export default function AdminMagazinesListPage() {
       )
       .subscribe();
 
-    // 2. Gentle fallback poll (15s) only if active publications are being processed
+    // 2. Gentle watchdog fallback (15s): Refreshes status and drives non-conflicting progress
     const activeMagazines = (data?.magazines || []).filter(
       (m: any) => m.processing_status === 'PROCESSING' || m.processing_status === 'QUEUED'
     );
 
     let fallbackTimer: NodeJS.Timeout | null = null;
     if (activeMagazines.length > 0) {
-      fallbackTimer = setInterval(() => {
+      fallbackTimer = setInterval(async () => {
         loadMagazines(token);
+
+        // Safe watchdog step: ensures progress continues even if container worker is offline
+        for (const mag of activeMagazines) {
+          try {
+            await fetch('/api/admin/data', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ action: 'process-step', id: mag.id, maxPages: 4 }),
+            });
+          } catch {
+            // Guarded watchdog step
+          }
+        }
       }, 15000);
     }
 

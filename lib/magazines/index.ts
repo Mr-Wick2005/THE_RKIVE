@@ -1,7 +1,21 @@
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { MagazineWithRelations } from '@/types/magazine';
 import { isSupabaseConfigured, withTimeout } from '@/lib/utils';
 import { FALLBACK_DEPARTMENTS } from '@/lib/departments';
+import { getCoverUrl } from '@/lib/storage/urls';
+
+/**
+ * Ensures magazine cover URLs (whether legacy Supabase URLs or relative keys)
+ * resolve to Cloudflare R2 when configured.
+ */
+function formatMagazineWithAssetUrls<T extends { cover_image_url?: string | null }>(mag: T): T {
+  if (!mag) return mag;
+  return {
+    ...mag,
+    cover_image_url: mag.cover_image_url ? getCoverUrl(mag.cover_image_url) : mag.cover_image_url,
+  };
+}
 
 export interface MagazineFilterOptions {
   departmentSlug?: string;
@@ -290,7 +304,7 @@ export async function getPublishedMagazines(
           results = results.filter((m) => m.department?.slug === departmentSlug);
         }
 
-        return results;
+        return results.map(formatMagazineWithAssetUrls);
       } catch (err) {
         console.error('Error in getPublishedMagazines:', err);
         return [];
@@ -311,38 +325,40 @@ export async function getFeaturedMagazines(limit = 4): Promise<MagazineWithRelat
 /**
  * Fetches a single published magazine by slug with relations
  */
-export async function getPublishedMagazineBySlug(
-  slug: string
-): Promise<MagazineWithRelations | null> {
-  if (!isSupabaseConfigured()) {
-    return null;
-  }
+export const getPublishedMagazineBySlug: (slug: string) => Promise<MagazineWithRelations | null> = cache(
+  async function getPublishedMagazineBySlug(
+    slug: string
+  ): Promise<MagazineWithRelations | null> {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
 
-  return withTimeout(
-    (async () => {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('magazines')
-          .select('*, department:departments(*)')
-          .eq('slug', slug)
-          .eq('status', 'PUBLISHED')
-          .single();
+    return withTimeout(
+      (async () => {
+        try {
+          const supabase = createClient();
+          const { data, error } = await supabase
+            .from('magazines')
+            .select('*, department:departments(*)')
+            .eq('slug', slug)
+            .eq('status', 'PUBLISHED')
+            .single();
 
-        if (error || !data) {
+          if (error || !data) {
+            return null;
+          }
+
+          return formatMagazineWithAssetUrls(data as MagazineWithRelations);
+        } catch (err) {
+          console.error('Error in getPublishedMagazineBySlug:', err);
           return null;
         }
-
-        return data as MagazineWithRelations;
-      } catch (err) {
-        console.error('Error in getPublishedMagazineBySlug:', err);
-        return null;
-      }
-    })(),
-    2500,
-    null
-  );
-}
+      })(),
+      2500,
+      null
+    );
+  }
+);
 
 /**
  * Fetches a single magazine by slug regardless of publication status (for admin preview)
@@ -368,7 +384,7 @@ export async function getMagazineBySlug(
           return null;
         }
 
-        return data as MagazineWithRelations;
+        return formatMagazineWithAssetUrls(data as MagazineWithRelations);
       } catch (err) {
         console.error('Error in getMagazineBySlug:', err);
         return null;
@@ -414,7 +430,7 @@ export async function getPublishedMagazinesByDepartment(
           return [];
         }
 
-        return data as MagazineWithRelations[];
+        return (data as MagazineWithRelations[]).map(formatMagazineWithAssetUrls);
       } catch (err) {
         console.error('Error in getPublishedMagazinesByDepartment:', err);
         return [];

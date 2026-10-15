@@ -2,6 +2,15 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { MagazineWithRelations, MagazineStatus } from '@/types/magazine';
 import { Profile } from '@/types/auth';
 import { isSupabaseConfigured, slugify, withTimeout } from '@/lib/utils';
+import { getCoverUrl, getPageImageUrl, getPageThumbnailUrl } from '@/lib/storage/urls';
+
+function formatAdminMagazineAssets<T extends { cover_image_url?: string | null }>(mag: T): T {
+  if (!mag) return mag;
+  return {
+    ...mag,
+    cover_image_url: mag.cover_image_url ? getCoverUrl(mag.cover_image_url) : mag.cover_image_url,
+  };
+}
 
 export { slugify };
 
@@ -96,7 +105,7 @@ export async function getMyDepartmentMagazines(
           return [];
         }
 
-        return data as MagazineWithRelations[];
+        return (data as MagazineWithRelations[]).map(formatAdminMagazineAssets);
       } catch (err) {
         console.error('Error in getMyDepartmentMagazines:', err);
         return [];
@@ -136,7 +145,7 @@ export async function getMyDepartmentMagazineById(
           return null;
         }
 
-        return data as MagazineWithRelations;
+        return formatAdminMagazineAssets(data as MagazineWithRelations);
       } catch (err) {
         console.error('Error in getMyDepartmentMagazineById:', err);
         return null;
@@ -224,7 +233,7 @@ export async function getReviewQueueMagazines(
           return [];
         }
 
-        return data as MagazineWithRelations[];
+        return (data as MagazineWithRelations[]).map(formatAdminMagazineAssets);
       } catch (err) {
         console.error('Error in getReviewQueueMagazines:', err);
         return [];
@@ -271,9 +280,15 @@ export async function getMagazineForReview(
           .eq('magazine_id', id)
           .order('created_at', { ascending: false });
 
+        const formattedMag = formatAdminMagazineAssets(magazine as MagazineWithRelations);
+
         return {
-          ...(magazine as any),
-          pages: pages || [],
+          ...formattedMag,
+          pages: (pages || []).map((p: any) => ({
+            ...p,
+            image_path: getPageImageUrl(p.image_path),
+            thumbnail_path: getPageThumbnailUrl(p.thumbnail_path),
+          })),
           status_history: history || [],
         } as MagazineWithRelations;
       } catch (err) {

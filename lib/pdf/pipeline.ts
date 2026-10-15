@@ -4,6 +4,8 @@ import { validatePdfBuffer } from './validator';
 import { loadPdfDocument, renderSinglePdfPage } from './renderer';
 import { extractStoragePath } from '../storage/upload';
 import { acquireSourcePdf, releaseSourcePdf } from './workspace';
+import { isR2ServerConfigured, uploadToR2 } from '../storage/r2';
+import { getPageImageUrl, getPageThumbnailUrl } from '../storage/urls';
 import { PIPELINE_CONFIG, QUEUE_CONFIG } from '../config/upload-limits';
 import { MagazineProcessingStatus } from '../../types/magazine';
 
@@ -376,43 +378,78 @@ export async function processMagazinePdf(
         thumbnailQuality: PIPELINE_CONFIG.DEFAULT_THUMBNAIL_QUALITY,
       });
 
-      // 2. Upload full page WebP with 1-year immutable caching
-      await uploadWithRetry(async () => {
-        return await supabase.storage
-          .from('magazine-pages')
-          .upload(imageStoragePath, rendered.imageBuffer, {
+      // 2. Upload full page WebP & thumbnail (R2 public bucket or Supabase Storage fallback)
+      let resolvedImagePath: string;
+      let resolvedThumbPath: string;
+
+      if (isR2ServerConfigured()) {
+        const r2ImageKey = `magazine-pages/${imageStoragePath}`;
+        const r2ThumbKey = `magazine-pages/${thumbStoragePath}`;
+
+        await uploadWithRetry(async () => {
+          await uploadToR2({
+            scope: 'public',
+            key: r2ImageKey,
+            body: rendered.imageBuffer,
             contentType: 'image/webp',
-            upsert: true,
             cacheControl: PIPELINE_CONFIG.PAGE_CACHE_CONTROL,
           });
-      }, 3, 300);
+          return { data: true, error: null };
+        }, 3, 300);
 
-      // 3. Upload thumbnail WebP with 1-year immutable caching
-      await uploadWithRetry(async () => {
-        return await supabase.storage
-          .from('magazine-pages')
-          .upload(thumbStoragePath, rendered.thumbnailBuffer, {
+        await uploadWithRetry(async () => {
+          await uploadToR2({
+            scope: 'public',
+            key: r2ThumbKey,
+            body: rendered.thumbnailBuffer,
             contentType: 'image/webp',
-            upsert: true,
             cacheControl: PIPELINE_CONFIG.PAGE_CACHE_CONTROL,
           });
-      }, 3, 300);
+          return { data: true, error: null };
+        }, 3, 300);
 
-      // 4. Get public URLs
-      const { data: imgUrlData } = supabase.storage
-        .from('magazine-pages')
-        .getPublicUrl(imageStoragePath);
+        resolvedImagePath = getPageImageUrl(r2ImageKey);
+        resolvedThumbPath = getPageThumbnailUrl(r2ThumbKey);
+      } else {
+        // Fallback: Upload to Supabase Storage
+        await uploadWithRetry(async () => {
+          return await supabase.storage
+            .from('magazine-pages')
+            .upload(imageStoragePath, rendered.imageBuffer, {
+              contentType: 'image/webp',
+              upsert: true,
+              cacheControl: PIPELINE_CONFIG.PAGE_CACHE_CONTROL,
+            });
+        }, 3, 300);
 
-      const { data: thumbUrlData } = supabase.storage
-        .from('magazine-pages')
-        .getPublicUrl(thumbStoragePath);
+        await uploadWithRetry(async () => {
+          return await supabase.storage
+            .from('magazine-pages')
+            .upload(thumbStoragePath, rendered.thumbnailBuffer, {
+              contentType: 'image/webp',
+              upsert: true,
+              cacheControl: PIPELINE_CONFIG.PAGE_CACHE_CONTROL,
+            });
+        }, 3, 300);
+
+        const { data: imgUrlData } = supabase.storage
+          .from('magazine-pages')
+          .getPublicUrl(imageStoragePath);
+
+        const { data: thumbUrlData } = supabase.storage
+          .from('magazine-pages')
+          .getPublicUrl(thumbStoragePath);
+
+        resolvedImagePath = imgUrlData.publicUrl;
+        resolvedThumbPath = thumbUrlData.publicUrl;
+      }
 
       // 5. Idempotent Upsert into magazine_pages
       const pageRecord = {
         magazine_id: magazineId,
         page_number: pageNum,
-        image_path: imgUrlData.publicUrl,
-        thumbnail_path: thumbUrlData.publicUrl,
+        image_path: resolvedImagePath,
+        thumbnail_path: resolvedThumbPath,
         width: rendered.width,
         height: rendered.height,
         file_size: rendered.fileSize,

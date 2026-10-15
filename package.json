@@ -10,6 +10,8 @@
     "worker": "tsx services/worker/index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@napi-rs/canvas": "^1.0.9",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.48.1",

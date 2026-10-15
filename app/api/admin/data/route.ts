@@ -13,6 +13,8 @@ import {
 } from '@/lib/magazines/admin';
 import { getEditorialUsers, getEditorialUserStats } from '@/lib/auth/bootstrap';
 import { getCoverStoragePath, getPdfStoragePath, deleteMagazineStorageAssets } from '@/lib/storage/upload';
+import { getCoverUrl } from '@/lib/storage/urls';
+import { isR2ServerConfigured, createR2PresignedUploadUrl } from '@/lib/storage/r2';
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { MagazineStatus } from '@/types/magazine';
@@ -188,6 +190,28 @@ export async function POST(request: Request) {
 
         if (fileType === 'pdf') {
           const filePath = getPdfStoragePath(effectiveDeptId, magazineId);
+
+          if (isR2ServerConfigured()) {
+            try {
+              const r2Key = `magazine-pdfs/${filePath}`;
+              const r2Presign = await createR2PresignedUploadUrl({
+                scope: 'private',
+                key: r2Key,
+                contentType: 'application/pdf',
+                expiresInSeconds: 600,
+              });
+              return NextResponse.json({
+                signedUrl: r2Presign.signedUrl,
+                token: 'r2',
+                path: r2Key,
+                bucket: r2Presign.bucket,
+                provider: 'r2',
+              });
+            } catch (r2Err: any) {
+              console.warn('[Storage] R2 signed PDF upload generation failed, falling back to Supabase:', r2Err);
+            }
+          }
+
           const { data: signData, error: signError } = await supabase.storage
             .from('magazine-pdfs')
             .createSignedUploadUrl(filePath, { upsert: true });
@@ -201,9 +225,36 @@ export async function POST(request: Request) {
             token: signData.token,
             path: filePath,
             bucket: 'magazine-pdfs',
+            provider: 'supabase',
           });
         } else if (fileType === 'cover') {
           const filePath = getCoverStoragePath(effectiveDeptId, magazineId, fileName || 'cover.jpg');
+          const ext = fileName?.split('.').pop()?.toLowerCase();
+          const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+          if (isR2ServerConfigured()) {
+            try {
+              const r2Key = `magazine-covers/${filePath}`;
+              const r2Presign = await createR2PresignedUploadUrl({
+                scope: 'public',
+                key: r2Key,
+                contentType,
+                expiresInSeconds: 300,
+              });
+              const resolvedPublicUrl = getCoverUrl(r2Key);
+              return NextResponse.json({
+                signedUrl: r2Presign.signedUrl,
+                token: 'r2',
+                path: r2Key,
+                publicUrl: resolvedPublicUrl,
+                bucket: r2Presign.bucket,
+                provider: 'r2',
+              });
+            } catch (r2Err: any) {
+              console.warn('[Storage] R2 signed cover upload generation failed, falling back to Supabase:', r2Err);
+            }
+          }
+
           const { data: signData, error: signError } = await supabase.storage
             .from('magazine-covers')
             .createSignedUploadUrl(filePath, { upsert: true });
@@ -212,13 +263,14 @@ export async function POST(request: Request) {
             console.error('[Storage] Error creating signed cover upload URL:', signError);
             return NextResponse.json({ error: signError?.message || 'Failed to generate upload URL' }, { status: 500 });
           }
-          const { data: { publicUrl } } = supabase.storage.from('magazine-covers').getPublicUrl(filePath);
+          const publicUrl = getCoverUrl(filePath);
           return NextResponse.json({
             signedUrl: signData.signedUrl,
             token: signData.token,
             path: filePath,
             publicUrl,
             bucket: 'magazine-covers',
+            provider: 'supabase',
           });
         }
         return NextResponse.json({ error: 'Invalid fileType. Expected "pdf" or "cover"' }, { status: 400 });

@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { cache } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Profile } from '@/types/auth';
+import { getCoverUrl } from '@/lib/storage/urls';
+import { isR2ServerConfigured, downloadFromR2, uploadToR2 } from '@/lib/storage/r2';
 import {
   LandingPageConfig,
   CmsVersionSnapshot,
@@ -159,8 +162,34 @@ async function readCloudConfig(): Promise<{
   draft_updated_at?: string;
   version: number;
 } | null> {
-  if (cachedCloudConfig && Date.now() - cachedCloudConfig.cachedAt < 5000) {
+  if (cachedCloudConfig && Date.now() - cachedCloudConfig.cachedAt < 60000) {
     return cachedCloudConfig.data;
+  }
+
+  // 1. Try reading from Cloudflare R2 Private Bucket if configured
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Buf = await downloadFromR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_CONFIG_PATH}`,
+      });
+      if (r2Buf) {
+        const text = r2Buf.toString('utf8');
+        const parsed = JSON.parse(text);
+        const res = {
+          draft: { ...DEFAULT_LANDING_PAGE_CONFIG, ...(parsed.draft || {}) },
+          published: { ...DEFAULT_LANDING_PAGE_CONFIG, ...(parsed.published || {}) },
+          published_at: parsed.published_at,
+          published_by_name: parsed.published_by_name,
+          draft_updated_at: parsed.draft_updated_at,
+          version: parsed.version || 1,
+        };
+        cachedCloudConfig = { data: res, cachedAt: Date.now() };
+        return res;
+      }
+    } catch (r2Err) {
+      // Fall through to Supabase
+    }
   }
 
   try {
@@ -191,6 +220,24 @@ async function readCloudConfig(): Promise<{
 
 async function writeCloudConfig(data: any): Promise<boolean> {
   invalidateRuntimeCache();
+
+  // 1. Write to Cloudflare R2 Private Bucket if configured
+  if (isR2ServerConfigured()) {
+    try {
+      const buffer = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
+      await uploadToR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_CONFIG_PATH}`,
+        body: buffer,
+        contentType: 'application/json',
+      });
+      cachedCloudConfig = { data, cachedAt: Date.now() };
+    } catch (r2Err) {
+      console.warn('[CMS:R2_WRITE_NOTE]', r2Err);
+    }
+  }
+
+  // 2. Dual-write to Supabase Storage for redundancy
   try {
     const supabase = createAdminClient();
     const buffer = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
@@ -221,10 +268,22 @@ async function writeCloudConfig(data: any): Promise<boolean> {
   } catch (err) {
     console.error('[CMS:CLOUD_WRITE_EXCEPTION]', err);
   }
-  return false;
+  return isR2ServerConfigured();
 }
 
 async function readCloudVersions(): Promise<CmsVersionSnapshot[]> {
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Buf = await downloadFromR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_VERSIONS_PATH}`,
+      });
+      if (r2Buf) {
+        return JSON.parse(r2Buf.toString('utf8'));
+      }
+    } catch (err) {}
+  }
+
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase.storage
@@ -239,6 +298,18 @@ async function readCloudVersions(): Promise<CmsVersionSnapshot[]> {
 }
 
 async function writeCloudVersions(versions: CmsVersionSnapshot[]): Promise<boolean> {
+  if (isR2ServerConfigured()) {
+    try {
+      const buffer = Buffer.from(JSON.stringify(versions, null, 2), 'utf8');
+      await uploadToR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_VERSIONS_PATH}`,
+        body: buffer,
+        contentType: 'application/json',
+      });
+    } catch (err) {}
+  }
+
   try {
     const supabase = createAdminClient();
     const buffer = Buffer.from(JSON.stringify(versions, null, 2), 'utf8');
@@ -255,6 +326,18 @@ async function writeCloudVersions(versions: CmsVersionSnapshot[]): Promise<boole
 }
 
 async function readCloudMedia(): Promise<CmsMediaAsset[]> {
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Buf = await downloadFromR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_MEDIA_PATH}`,
+      });
+      if (r2Buf) {
+        return JSON.parse(r2Buf.toString('utf8'));
+      }
+    } catch (err) {}
+  }
+
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase.storage
@@ -269,6 +352,18 @@ async function readCloudMedia(): Promise<CmsMediaAsset[]> {
 }
 
 async function writeCloudMedia(media: CmsMediaAsset[]): Promise<boolean> {
+  if (isR2ServerConfigured()) {
+    try {
+      const buffer = Buffer.from(JSON.stringify(media, null, 2), 'utf8');
+      await uploadToR2({
+        scope: 'private',
+        key: `cms-assets/${STORAGE_MEDIA_PATH}`,
+        body: buffer,
+        contentType: 'application/json',
+      });
+    } catch (err) {}
+  }
+
   try {
     const supabase = createAdminClient();
     const buffer = Buffer.from(JSON.stringify(media, null, 2), 'utf8');
@@ -292,7 +387,8 @@ async function writeCloudMedia(media: CmsMediaAsset[]): Promise<boolean> {
  * Returns the currently published LandingPageConfig for the public homepage.
  * Highly resilient: uses Supabase DB if available, Supabase Cloud Storage, or local fallback.
  */
-export async function getPublishedLandingPageConfig(): Promise<LandingPageConfig> {
+export const getPublishedLandingPageConfig: () => Promise<LandingPageConfig> = cache(
+  async function getPublishedLandingPageConfig(): Promise<LandingPageConfig> {
   // 1. Try DB table homepage_configs
   try {
     const supabase = createAdminClient();
@@ -325,7 +421,7 @@ export async function getPublishedLandingPageConfig(): Promise<LandingPageConfig
   const backup = readBackupConfig();
   const { sanitized } = validateAndSanitizeConfig(backup.published);
   return sanitized;
-}
+});
 
 /**
  * Returns the current draft LandingPageConfig for the Super Admin Studio.
@@ -502,7 +598,7 @@ export async function getLandingPageStudioData(profile: Profile): Promise<CmsStu
         academic_year: m.academic_year,
         department_id: m.department_id,
         department_name: m.department?.name,
-        cover_image_url: m.cover_image_url,
+        cover_image_url: m.cover_image_url ? getCoverUrl(m.cover_image_url) : m.cover_image_url,
         published_at: m.published_at,
       }));
     }

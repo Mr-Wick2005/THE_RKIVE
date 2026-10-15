@@ -1,6 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
 import { Department, DepartmentWithStats } from '@/types/department';
 import { isSupabaseConfigured, withTimeout } from '@/lib/utils';
+import { getCoverUrl } from '@/lib/storage/urls';
+
+function formatDepartmentAssets<T extends Department>(dept: T): T {
+  if (!dept) return dept;
+  return {
+    ...dept,
+    cover_image_url: dept.cover_image_url ? getCoverUrl(dept.cover_image_url) : dept.cover_image_url,
+    logo_url: dept.logo_url ? getCoverUrl(dept.logo_url) : dept.logo_url,
+  };
+}
 
 // Standard college academic departments
 export const FALLBACK_DEPARTMENTS: Department[] = [
@@ -124,7 +134,7 @@ export async function getActiveDepartments(): Promise<Department[]> {
           return [];
         }
 
-        return data;
+        return (data as Department[]).map(formatDepartmentAssets);
       } catch (err) {
         console.error('Error in getActiveDepartments:', err);
         return [];
@@ -156,7 +166,8 @@ export async function getDepartmentsWithStats(): Promise<DepartmentWithStats[]> 
             .eq('status', 'PUBLISHED'),
         ]);
 
-        const departments: Department[] = deptRes.data || [];
+        const rawDepts: Department[] = deptRes.data || [];
+        const departments: Department[] = rawDepts.map(formatDepartmentAssets);
         const magazines = magRes.data || [];
 
         if (departments.length === 0) return [];
@@ -209,7 +220,7 @@ export async function getDepartmentBySlug(slug: string): Promise<Department | nu
           return null;
         }
 
-        return data;
+        return formatDepartmentAssets(data as Department);
       } catch (err) {
         console.error('Error in getDepartmentBySlug:', err);
         return null;
@@ -240,7 +251,7 @@ export async function getDepartmentById(id: string): Promise<Department | null> 
       return null;
     }
 
-    return data;
+    return formatDepartmentAssets(data as Department);
   } catch (err) {
     console.error('Error in getDepartmentById:', err);
     return null;

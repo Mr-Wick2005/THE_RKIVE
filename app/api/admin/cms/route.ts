@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getCurrentProfile } from '@/lib/auth/session';
 import {
   getLandingPageStudioData,
@@ -59,6 +60,9 @@ export async function POST(request: Request) {
         if (!pubResult.success) {
           return NextResponse.json({ error: pubResult.error }, { status: 400 });
         }
+        try {
+          revalidatePath('/');
+        } catch {}
         return NextResponse.json({
           success: true,
           version: pubResult.version,
@@ -75,6 +79,9 @@ export async function POST(request: Request) {
         if (!restoreResult.success) {
           return NextResponse.json({ error: restoreResult.error }, { status: 400 });
         }
+        try {
+          revalidatePath('/');
+        } catch {}
         return NextResponse.json({
           success: true,
           version: restoreResult.version,
@@ -84,6 +91,9 @@ export async function POST(request: Request) {
 
       case 'reset-defaults': {
         await resetLandingPageToDefaults(profile);
+        try {
+          revalidatePath('/');
+        } catch {}
         return NextResponse.json({
           success: true,
           message: 'Draft reset to system defaults',

@@ -1,13 +1,29 @@
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { MagazinePage, MagazineProcessingStatus } from '@/types/magazine';
 import { isSupabaseConfigured, withTimeout } from '@/lib/utils';
+import { getPageImageUrl, getPageThumbnailUrl } from '@/lib/storage/urls';
+
+/**
+ * Maps page storage paths (whether legacy Supabase URLs or relative keys)
+ * to resolved public asset URLs (using Cloudflare R2 when configured).
+ */
+function mapPageAssetUrls(page: MagazinePage): MagazinePage {
+  if (!page) return page;
+  return {
+    ...page,
+    image_path: getPageImageUrl(page.image_path),
+    thumbnail_path: getPageThumbnailUrl(page.thumbnail_path),
+  };
+}
 
 /**
  * Retrieves all processed pages for a magazine ordered sequentially by page_number.
  * RLS ensures that public users only receive pages for PUBLISHED magazines,
  * and department admins only receive pages for their own department's magazines.
  */
-export async function getMagazinePages(magazineId: string): Promise<MagazinePage[]> {
+export const getMagazinePages: (magazineId: string) => Promise<MagazinePage[]> = cache(
+  async function getMagazinePages(magazineId: string): Promise<MagazinePage[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
@@ -26,7 +42,7 @@ export async function getMagazinePages(magazineId: string): Promise<MagazinePage
           return [];
         }
 
-        return data as MagazinePage[];
+        return (data as MagazinePage[]).map(mapPageAssetUrls);
       } catch (err) {
         console.error(`Error fetching pages for magazine ${magazineId}:`, err);
         return [];
@@ -35,7 +51,7 @@ export async function getMagazinePages(magazineId: string): Promise<MagazinePage
     2500,
     []
   );
-}
+});
 
 /**
  * Retrieves a single page for a magazine by page number (1-indexed).
@@ -56,7 +72,7 @@ export async function getMagazinePage(
     return null;
   }
 
-  return data as MagazinePage;
+  return mapPageAssetUrls(data as MagazinePage);
 }
 
 /**

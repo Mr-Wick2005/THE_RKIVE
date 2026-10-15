@@ -9,8 +9,8 @@
  */
 
 export const STORAGE_LIMITS = {
-  // Max source PDF size (100 MB target)
-  MAX_PDF_SIZE_BYTES: 100 * 1024 * 1024,
+  // Max source PDF size: 50 MB (Strict Supabase Free Tier platform limit)
+  MAX_PDF_SIZE_BYTES: 50 * 1024 * 1024,
   // Minimum valid PDF size (bytes)
   MIN_PDF_SIZE_BYTES: 100,
   // Max cover art size (10 MB)

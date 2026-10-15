@@ -1,6 +1,18 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 import { STORAGE_LIMITS } from '@/lib/config/upload-limits';
+import { getCoverUrl } from './urls';
+import { isR2ServerConfigured, uploadToR2, deletePrefixFromR2 } from './r2';
+
+export {
+  getStorageAssetUrl,
+  getCoverUrl,
+  getPageImageUrl,
+  getPageThumbnailUrl,
+  getCmsAssetUrl,
+  getR2PublicBaseUrl,
+  isR2PublicConfigured,
+} from './urls';
 
 export const MAX_COVER_SIZE_BYTES = STORAGE_LIMITS.MAX_COVER_SIZE_BYTES;
 export const MAX_PDF_SIZE_BYTES = STORAGE_LIMITS.MAX_PDF_SIZE_BYTES;
@@ -136,6 +148,24 @@ export async function uploadMagazineCover(
   }
 
   const contentType = (file as any).type || 'image/jpeg';
+
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Key = `magazine-covers/${filePath}`;
+      await uploadToR2({
+        scope: 'public',
+        key: r2Key,
+        body: uploadPayload,
+        contentType,
+        cacheControl: 'public, max-age=31536000, immutable',
+      });
+      const publicUrl = getCoverUrl(r2Key);
+      return { path: filePath, publicUrl };
+    } catch (r2Err) {
+      console.warn('[Storage] R2 cover upload note, falling back to Supabase:', r2Err);
+    }
+  }
+
   const { data, error } = await supabase.storage
     .from('magazine-covers')
     .upload(filePath, uploadPayload, {
@@ -148,9 +178,7 @@ export async function uploadMagazineCover(
     throw new Error(`Failed to upload cover image: ${error.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('magazine-covers').getPublicUrl(filePath);
+  const publicUrl = getCoverUrl(filePath);
 
   return { path: filePath, publicUrl };
 }
@@ -179,6 +207,21 @@ export async function uploadMagazinePdf(
     uploadPayload = Buffer.from(arrayBuffer);
   }
 
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Key = `magazine-pdfs/${filePath}`;
+      await uploadToR2({
+        scope: 'private',
+        key: r2Key,
+        body: uploadPayload,
+        contentType: 'application/pdf',
+      });
+      return { path: filePath };
+    } catch (r2Err) {
+      console.warn('[Storage] R2 PDF upload note, falling back to Supabase:', r2Err);
+    }
+  }
+
   const { data, error } = await supabase.storage
     .from('magazine-pdfs')
     .upload(filePath, uploadPayload, {
@@ -196,7 +239,7 @@ export async function uploadMagazinePdf(
 
 /**
  * Safely removes all storage assets (cover, PDF, rendered pages, thumbnails)
- * associated with a magazine from Supabase storage buckets.
+ * associated with a magazine from Supabase storage buckets and Cloudflare R2.
  */
 export async function deleteMagazineStorageAssets(
   supabase: SupabaseClient<any, any, any> | any,
@@ -205,7 +248,18 @@ export async function deleteMagazineStorageAssets(
 ): Promise<void> {
   const folderPrefix = `${departmentId}/${magazineId}`;
 
-  // 1. Clean up magazine-covers
+  // 1. Clean up Cloudflare R2 (both public and private buckets)
+  if (isR2ServerConfigured()) {
+    try {
+      await deletePrefixFromR2({ scope: 'public', prefix: `magazine-covers/${folderPrefix}` });
+      await deletePrefixFromR2({ scope: 'public', prefix: `magazine-pages/${folderPrefix}` });
+      await deletePrefixFromR2({ scope: 'private', prefix: `magazine-pdfs/${folderPrefix}` });
+    } catch (r2Err) {
+      console.warn('[Storage Cleanup] Non-critical R2 cleanup warning:', r2Err);
+    }
+  }
+
+  // 2. Clean up magazine-covers in Supabase
   try {
     const { data: coverFiles } = await supabase.storage
       .from('magazine-covers')
@@ -219,7 +273,7 @@ export async function deleteMagazineStorageAssets(
     console.warn('[Storage Cleanup] Non-critical cover cleanup warning:', err);
   }
 
-  // 2. Clean up magazine-pdfs
+  // 3. Clean up magazine-pdfs in Supabase
   try {
     const { data: pdfFiles } = await supabase.storage
       .from('magazine-pdfs')
@@ -233,7 +287,7 @@ export async function deleteMagazineStorageAssets(
     console.warn('[Storage Cleanup] Non-critical PDF cleanup warning:', err);
   }
 
-  // 3. Clean up magazine-pages (pages and thumbnails)
+  // 4. Clean up magazine-pages in Supabase (pages and thumbnails)
   try {
     const { data: pageFiles } = await supabase.storage
       .from('magazine-pages')

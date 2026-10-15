@@ -14,8 +14,7 @@ import {
   BookshelfSection,
 } from '@/components/home';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60; // 60s ISR caching with on-demand revalidation on CMS publish
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getPublishedLandingPageConfig();

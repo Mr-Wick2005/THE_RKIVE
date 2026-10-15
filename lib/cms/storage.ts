@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getStorageAssetUrl, getCmsAssetUrl } from '@/lib/storage/urls';
+import { isR2ServerConfigured, uploadToR2 } from '@/lib/storage/r2';
 
 export const MAX_CMS_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_CMS_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -66,6 +68,30 @@ export async function uploadCmsAsset(
     payload = Buffer.from(arrayBuffer);
   }
 
+  // 1. Upload to Cloudflare R2 Public Bucket if configured
+  if (isR2ServerConfigured()) {
+    try {
+      const r2Key = `cms-assets/${filePath}`;
+      await uploadToR2({
+        scope: 'public',
+        key: r2Key,
+        body: payload,
+        contentType: mimeType,
+        cacheControl: 'public, max-age=31536000, immutable',
+      });
+      const resolvedPublicUrl = getCmsAssetUrl(r2Key);
+      return {
+        filePath,
+        publicUrl: resolvedPublicUrl,
+        fileName,
+        fileSize,
+        mimeType,
+      };
+    } catch (r2Err) {
+      console.warn('[CMS Storage] R2 upload note, falling back to Supabase:', r2Err);
+    }
+  }
+
   const supabase = createAdminClient();
 
   // Try uploading to 'cms-assets', fall back to 'magazine-covers' if cms-assets is not yet created
@@ -94,13 +120,11 @@ export async function uploadCmsAsset(
     throw new Error(`Upload failed: ${error.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+  const resolvedPublicUrl = getStorageAssetUrl(filePath, { bucket: bucketName });
 
   return {
     filePath,
-    publicUrl,
+    publicUrl: resolvedPublicUrl,
     fileName,
     fileSize,
     mimeType,

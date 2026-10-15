@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { isR2ServerConfigured, downloadFromR2 } from '@/lib/storage/r2';
 
 export interface AcquiredPdf {
   localPath: string;
@@ -94,16 +95,37 @@ export async function acquireSourcePdf(
     `[PDF_WORKSPACE] CACHE_MISS publication_id=${magazineId} -> Downloading from storage path=${storagePath}`
   );
 
-  // 2. Download from Supabase Storage
+  // 2. Download from R2 Private Bucket (if configured) or Supabase Storage
   let downloadedBuffer: Buffer | null = null;
-  const { data: downloadedBlob, error: downloadError } = await supabase.storage
-    .from('magazine-pdfs')
-    .download(storagePath);
+  let downloadError: any = null;
 
-  if (downloadedBlob) {
-    const arrayBuf = await downloadedBlob.arrayBuffer();
-    downloadedBuffer = Buffer.from(arrayBuf);
-  } else {
+  if (isR2ServerConfigured()) {
+    try {
+      const cleanPath = storagePath.startsWith('magazine-pdfs/') ? storagePath : `magazine-pdfs/${storagePath}`;
+      console.log(`[PDF_WORKSPACE] Attempting download from R2 private bucket: ${cleanPath}`);
+      const r2Buf = await downloadFromR2({ scope: 'private', key: cleanPath });
+      if (r2Buf && r2Buf.length > 0) {
+        console.log(`[PDF_WORKSPACE] Downloaded ${r2Buf.length} bytes from R2 private bucket`);
+        downloadedBuffer = r2Buf;
+      }
+    } catch (r2Err) {
+      console.warn(`[PDF_WORKSPACE] R2 download attempt note, trying Supabase fallback:`, r2Err);
+    }
+  }
+
+  if (!downloadedBuffer) {
+    const { data: downloadedBlob, error: supaErr } = await supabase.storage
+      .from('magazine-pdfs')
+      .download(storagePath);
+    downloadError = supaErr;
+
+    if (downloadedBlob) {
+      const arrayBuf = await downloadedBlob.arrayBuffer();
+      downloadedBuffer = Buffer.from(arrayBuf);
+    }
+  }
+
+  if (!downloadedBuffer) {
     // Fallback 1: Direct signed URL
     try {
       const { data: signedData } = await supabase.storage
