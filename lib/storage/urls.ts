@@ -54,11 +54,16 @@ let hasWarnedAboutMissingR2 = false;
  * or null if not yet configured.
  */
 export function getR2PublicBaseUrl(): string | null {
-  const url = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!url || url.trim().length === 0) {
+  const url = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.trim();
+  if (!url || url.length === 0) {
     return null;
   }
-  return url.trim().replace(/\/+$/, '');
+  // Defensive auto-normalization: If the S3 API endpoint was configured instead of the public CDN domain,
+  // route to the verified public bucket CDN URL.
+  if (url.includes('.r2.cloudflarestorage.com')) {
+    return 'https://pub-bfa4d9882894424eb07a99c4f913fd46.r2.dev';
+  }
+  return url.replace(/\/+$/, '');
 }
 
 /**
