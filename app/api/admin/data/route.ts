@@ -18,7 +18,7 @@ import { isR2ServerConfigured, createR2PresignedUploadUrl } from '@/lib/storage/
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { MagazineStatus } from '@/types/magazine';
-import { hasValidPaidObligation, getPlatformFeePaise } from '@/lib/payments/service';
+import { hasValidPaidObligation, getPlatformFeePaise, cleanupMagazinePayments } from '@/lib/payments/service';
 import { formatPaiseToRupees } from '@/lib/payments/config';
 
 export const dynamic = 'force-dynamic';
@@ -565,6 +565,8 @@ export async function POST(request: Request) {
         }
 
         await deleteMagazineStorageAssets(supabase, existing.department_id, existing.id);
+
+        await cleanupMagazinePayments(supabase, id);
 
         const { error: deleteError } = await supabase
           .from('magazines')

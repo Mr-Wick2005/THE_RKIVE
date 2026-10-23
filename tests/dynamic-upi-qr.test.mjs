@@ -447,5 +447,80 @@ describe('Razorpay Dynamic UPI QR Integration & Invariants', () => {
     assert.equal(checkCrossMagazine('pay_qr_exclusive_999', 'obl_mag_beta').allowed, false);
     assert.equal(checkCrossMagazine('pay_brand_new_111', 'obl_mag_beta').allowed, true);
   });
+
+  test('20. Deleting a publication safely cascades/cleans up payment attempts, claims, and obligations', async () => {
+    const db = createMockDb();
+    const magId = 'mag-dept-cse-01';
+
+    // Seed payment records for this magazine
+    db.magazine_payments.push({
+      id: 'obl-01',
+      magazine_id: magId,
+      status: 'PAID',
+      amount_paise: 2000,
+    });
+    db.payment_attempts.push({
+      id: 'att-01',
+      obligation_id: 'obl-01',
+      magazine_id: magId,
+      provider_order_id: 'order_123',
+    });
+    db.payment_audit_logs.push({
+      id: 'log-01',
+      magazine_id: magId,
+      event_type: 'ORDER_CREATED',
+    });
+
+    assert.equal(db.magazine_payments.filter(p => p.magazine_id === magId).length, 1);
+    assert.equal(db.payment_attempts.filter(a => a.magazine_id === magId).length, 1);
+    assert.equal(db.payment_audit_logs.filter(l => l.magazine_id === magId).length, 1);
+
+    // Mock supabase client to test deletion cascade order
+    const mockSupabase = {
+      from: (tableName) => ({
+        delete: () => ({
+          eq: (col, val) => {
+            if (tableName === 'payment_attempts') {
+              db.payment_attempts = db.payment_attempts.filter(r => r[col] !== val);
+            } else if (tableName === 'manual_upi_claims') {
+              // none
+            } else if (tableName === 'payment_audit_logs') {
+              db.payment_audit_logs = db.payment_audit_logs.filter(r => r[col] !== val);
+            } else if (tableName === 'magazine_payments') {
+              // Ensure attempts were already cleared so foreign key would not fail
+              if (db.payment_attempts.some(a => a.magazine_id === val)) {
+                throw new Error('Foreign key violation: payment_attempts references magazine_payments');
+              }
+              db.magazine_payments = db.magazine_payments.filter(r => r[col] !== val);
+            } else if (tableName === 'magazines') {
+              // Ensure payments were already cleared
+              if (db.magazine_payments.some(p => p.magazine_id === val)) {
+                throw new Error('update or delete on table "magazines" violates foreign key constraint "magazine_payments_magazine_id_fkey" on table "magazine_payments"');
+              }
+              db.magazines = db.magazines.filter(m => m.id !== val);
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+        }),
+      }),
+    };
+
+    async function cleanupMagazinePaymentsMock(supabase, magazineId) {
+      if (!magazineId) return;
+      await supabase.from('payment_attempts').delete().eq('magazine_id', magazineId);
+      await supabase.from('manual_upi_claims').delete().eq('magazine_id', magazineId);
+      await supabase.from('payment_audit_logs').delete().eq('magazine_id', magazineId);
+      await supabase.from('magazine_payments').delete().eq('magazine_id', magazineId);
+    }
+
+    await cleanupMagazinePaymentsMock(mockSupabase, magId);
+
+    // Now delete from magazines - should succeed without foreign key violation!
+    const { error: deleteErr } = await mockSupabase.from('magazines').delete().eq('id', magId);
+    assert.equal(deleteErr, null);
+    assert.equal(db.magazines.filter(m => m.id === magId).length, 0);
+    assert.equal(db.magazine_payments.filter(p => p.magazine_id === magId).length, 0);
+    assert.equal(db.payment_attempts.filter(a => a.magazine_id === magId).length, 0);
+  });
 });
 

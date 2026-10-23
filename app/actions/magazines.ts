@@ -9,7 +9,7 @@ import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { isSupabaseConfigured } from '@/lib/utils';
 import { MagazineProcessingStatus, MagazineStatus } from '@/types/magazine';
-import { hasValidPaidObligation, getPlatformFeePaise } from '@/lib/payments/service';
+import { hasValidPaidObligation, getPlatformFeePaise, cleanupMagazinePayments } from '@/lib/payments/service';
 import { formatPaiseToRupees } from '@/lib/payments/config';
 
 export interface ActionResult {
@@ -481,7 +481,11 @@ export async function deleteMagazineAction(id: string, token?: string): Promise<
     // 1. Purge all storage assets (cover image, original PDF, pages, and thumbnails)
     await deleteMagazineStorageAssets(supabase, existing.department_id, existing.id);
 
-    // 2. Delete the magazine record from database (cascades to pages and audit history)
+    // 2. Safely remove associated payment records (obligations, attempts, claims, audit logs)
+    // to prevent foreign key constraint violations
+    await cleanupMagazinePayments(supabase, id);
+
+    // 3. Delete the magazine record from database (cascades to pages and audit history)
     const { error: deleteError } = await supabase
       .from('magazines')
       .delete()

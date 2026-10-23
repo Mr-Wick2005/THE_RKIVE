@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.platform_fee_audit_logs (
 -- 4. MAGAZINE PAYMENT OBLIGATIONS TABLE
 CREATE TABLE IF NOT EXISTS public.magazine_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE RESTRICT,
+    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE CASCADE,
     department_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE RESTRICT,
     amount_paise INTEGER NOT NULL CHECK (amount_paise >= 0),
     currency TEXT NOT NULL DEFAULT 'INR',
@@ -89,8 +89,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_paid_obligation
 -- 5. PAYMENT ATTEMPTS TABLE (Gateway Transactions / Orders)
 CREATE TABLE IF NOT EXISTS public.payment_attempts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    obligation_id UUID NOT NULL REFERENCES public.magazine_payments(id) ON DELETE RESTRICT,
-    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE RESTRICT,
+    obligation_id UUID NOT NULL REFERENCES public.magazine_payments(id) ON DELETE CASCADE,
+    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE CASCADE,
     provider TEXT NOT NULL DEFAULT 'RAZORPAY',
     provider_order_id TEXT UNIQUE NOT NULL,
     provider_payment_id TEXT UNIQUE,
@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS public.payment_attempts (
 -- 6. MANUAL UPI CLAIMS TABLE
 CREATE TABLE IF NOT EXISTS public.manual_upi_claims (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    obligation_id UUID NOT NULL REFERENCES public.magazine_payments(id) ON DELETE RESTRICT,
-    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE RESTRICT,
+    obligation_id UUID NOT NULL REFERENCES public.magazine_payments(id) ON DELETE CASCADE,
+    magazine_id UUID NOT NULL REFERENCES public.magazines(id) ON DELETE CASCADE,
     department_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE RESTRICT,
     utr_reference TEXT UNIQUE NOT NULL,
     amount_paise INTEGER NOT NULL,

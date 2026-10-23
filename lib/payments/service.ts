@@ -2156,3 +2156,77 @@ export async function verifyManualUpiClaim(
 
   return { success: true };
 }
+
+/**
+ * Safely cleans up all payment-related records for a given magazine.
+ * This MUST be called before deleting a row from `magazines` so that
+ * foreign key constraints (e.g. `magazine_payments_magazine_id_fkey`)
+ * are never violated even if ON DELETE CASCADE is not configured in DB.
+ */
+export async function cleanupMagazinePayments(
+  supabase: DbClient,
+  magazineId: string
+): Promise<void> {
+  if (!magazineId) return;
+
+  // 1. Delete payment_attempts referencing this magazine
+  try {
+    await (supabase.from('payment_attempts') as any)
+      .delete()
+      .eq('magazine_id', magazineId);
+  } catch (err: any) {
+    if (!isMissingTableError(err)) {
+      console.warn('Non-fatal: could not clear payment_attempts for magazine:', magazineId, err?.message);
+    }
+  }
+
+  // 2. Delete manual_upi_claims referencing this magazine
+  try {
+    await (supabase.from('manual_upi_claims') as any)
+      .delete()
+      .eq('magazine_id', magazineId);
+  } catch (err: any) {
+    if (!isMissingTableError(err)) {
+      console.warn('Non-fatal: could not clear manual_upi_claims for magazine:', magazineId, err?.message);
+    }
+  }
+
+  // 3. Delete payment_audit_logs referencing this magazine
+  try {
+    await (supabase.from('payment_audit_logs') as any)
+      .delete()
+      .eq('magazine_id', magazineId);
+  } catch (err: any) {
+    if (!isMissingTableError(err)) {
+      console.warn('Non-fatal: could not clear payment_audit_logs for magazine:', magazineId, err?.message);
+    }
+  }
+
+  // 4. Delete payment_audit_ledger (if legacy table exists)
+  try {
+    await (supabase as any)
+      .from('payment_audit_ledger')
+      .delete()
+      .eq('magazine_id', magazineId);
+  } catch {
+    // ignore
+  }
+
+  // 5. Delete magazine_payments obligation records
+  try {
+    await (supabase.from('magazine_payments') as any)
+      .delete()
+      .eq('magazine_id', magazineId);
+  } catch (err: any) {
+    if (!isMissingTableError(err)) {
+      console.warn('Non-fatal: could not clear magazine_payments for magazine:', magazineId, err?.message);
+    }
+  }
+
+  // 6. Clear in-memory sandbox state if active
+  try {
+    isolatedSandboxStore.obligations.delete(magazineId);
+  } catch {
+    // ignore
+  }
+}
