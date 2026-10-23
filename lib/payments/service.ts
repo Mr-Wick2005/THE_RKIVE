@@ -647,6 +647,72 @@ export async function createOrGetPaymentOrder(
 }
 
 /**
+ * In-memory cache for cropped square QR data URIs to avoid redundant network / sharp processing.
+ */
+const squareQrCache = new Map<string, string>();
+
+/**
+ * Extracts the crisp, full-size square QR code from Razorpay's 674x1644 standee image.
+ * Returns a base64 data URI for instant, zero-latency rendering in the UI.
+ * If the input is already an SVG/data URI or if cropping is not needed, returns original URL.
+ */
+export async function extractSquareQrFromStandee(imageUrl: string): Promise<string> {
+  if (!imageUrl || imageUrl.startsWith('data:') || imageUrl.endsWith('.svg')) {
+    return imageUrl;
+  }
+
+  const cached = squareQrCache.get(imageUrl);
+  if (cached) return cached;
+
+  try {
+    const sharp = (await import('sharp')).default;
+    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return imageUrl;
+
+    const arrayBuf = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    const meta = await sharp(buffer).metadata();
+
+    if (meta.width && meta.height && meta.height > meta.width * 1.5) {
+      // In Razorpay's standard 674x1644 standee template, the QR is at x=[146, 525], y=[658, 1037].
+      const scaleX = meta.width / 674;
+      const scaleY = meta.height / 1644;
+
+      const qrLeft = Math.round(146 * scaleX);
+      const qrTop = Math.round(658 * scaleY);
+      const qrW = Math.round(379 * scaleX);
+      const qrH = Math.round(379 * scaleY);
+
+      // Clean 20px padding around the finder patterns
+      const pad = Math.round(20 * scaleX);
+      const extractLeft = Math.max(0, qrLeft - pad);
+      const extractTop = Math.max(0, qrTop - pad);
+      const extractWidth = Math.min(meta.width - extractLeft, qrW + pad * 2);
+      const extractHeight = Math.min(meta.height - extractTop, qrH + pad * 2);
+
+      const croppedBuffer = await sharp(buffer)
+        .extract({
+          left: extractLeft,
+          top: extractTop,
+          width: extractWidth,
+          height: extractHeight,
+        })
+        .png()
+        .toBuffer();
+
+      const dataUri = `data:image/png;base64,${croppedBuffer.toString('base64')}`;
+      squareQrCache.set(imageUrl, dataUri);
+      return dataUri;
+    }
+
+    return imageUrl;
+  } catch (err: any) {
+    console.warn('[Payments] Note: standee square QR crop fallback:', err?.message || err);
+    return imageUrl;
+  }
+}
+
+/**
  * Creates or retrieves a pending Dynamic UPI QR code via Razorpay QR Code API.
  * Enforces single-use, fixed-amount, expiration window, and strict idempotency.
  */
@@ -821,10 +887,11 @@ export async function createOrGetDynamicQr(
     if (resolvedQrId && resolvedImageUrl && (!isSimulatedQr || !hasConfiguredKeys)) {
       const nowUnix = Math.floor(Date.now() / 1000);
       if (!resolvedCloseBy || resolvedCloseBy > nowUnix + 60) {
+        const displayImageUrl = await extractSquareQrFromStandee(resolvedImageUrl);
         return {
           success: true,
           qrId: resolvedQrId,
-          imageUrl: resolvedImageUrl,
+          imageUrl: displayImageUrl,
           amountPaise: obligation.amount_paise,
           currency: obligation.currency,
           closeBy: resolvedCloseBy,
@@ -952,10 +1019,12 @@ export async function createOrGetDynamicQr(
       // non-fatal audit log warning
     }
 
+    const displayImageUrl = await extractSquareQrFromStandee(qrResponse.imageUrl);
+
     return {
       success: true,
       qrId: qrResponse.id,
-      imageUrl: qrResponse.imageUrl,
+      imageUrl: displayImageUrl,
       amountPaise: obligation.amount_paise,
       currency: obligation.currency,
       closeBy: qrResponse.closeBy,

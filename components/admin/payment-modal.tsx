@@ -726,18 +726,39 @@ export function PaymentModal({
                   {/* Status & Alerts */}
                   <div className="space-y-2">
                     {paymentMode === 'qr' && qrData && !isExpired && (
-                      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-stone-900/90 border border-stone-800/80 text-sm">
-                        <div className="flex items-center gap-2 text-stone-300">
-                          <span className="relative flex h-2.5 w-2.5 shrink-0">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                          </span>
-                          <span className="text-xs sm:text-sm font-medium text-stone-200">Awaiting UPI confirmation...</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-stone-900/90 border border-stone-800/80 text-sm">
+                          <div className="flex items-center gap-2 text-stone-300">
+                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                            </span>
+                            <span className="text-xs sm:text-sm font-medium text-stone-200">Awaiting UPI confirmation...</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-mono font-semibold text-amber-300 shrink-0">
+                            <Clock className="w-4 h-4 text-amber-400" />
+                            <span>{formatCountdown(qrSecondsRemaining)}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-mono font-semibold text-amber-300 shrink-0">
-                          <Clock className="w-4 h-4 text-amber-400" />
-                          <span>{formatCountdown(qrSecondsRemaining)}</span>
-                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleManualVerifyClick}
+                          disabled={isCheckingManual}
+                          className="w-full py-2 px-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] hover:bg-amber-500/15 text-amber-300 text-xs sm:text-[13px] font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                        >
+                          {isCheckingManual ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              <span>Checking payment status with bank...</span>
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Paid via UPI app? Tap to Check Status</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     )}
 
@@ -851,8 +872,8 @@ export function PaymentModal({
                     </div>
                   </div>
                 ) : (
-                  /* QR Code Mode */
-                  <div className="w-full h-full flex-1 flex flex-col items-center justify-between gap-3">
+                  /* QR Code Mode — Big Full-Size UI */
+                  <>
                     {isLoadingQr ? (
                       <div className="w-full h-full flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center rounded-xl bg-stone-900/60 border border-stone-800/80 min-h-[340px]">
                         <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
@@ -860,34 +881,37 @@ export function PaymentModal({
                         <p className="text-xs text-stone-400">Creating Razorpay payment request</p>
                       </div>
                     ) : qrData ? (
-                      <div className="w-full flex-1 flex flex-col items-center justify-center relative min-h-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={qrData.imageUrl}
-                          alt="Razorpay Dynamic UPI QR"
-                          className={`w-full max-h-[360px] object-contain rounded-xl select-none transition-all duration-200 drop-shadow-2xl ${
-                            isExpired ? 'opacity-25 grayscale' : 'opacity-100'
-                          }`}
-                        />
-                        {/* Expiration Overlay */}
-                        {isExpired && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-stone-950/85 backdrop-blur-sm rounded-xl text-center space-y-3 animate-in fade-in duration-150">
-                            <Clock className="w-8 h-8 text-rose-400" />
-                            <div>
-                              <p className="text-base font-semibold text-stone-100">QR Code Expired</p>
-                              <p className="text-xs text-stone-400 mt-0.5">Session expired for payment security</p>
+                      <div className="w-full h-full flex-1 flex items-center justify-center relative min-h-0">
+                        {/* Large, full-sized white card matching the original UI */}
+                        <div className="w-full max-w-[340px] sm:max-w-[370px] aspect-square rounded-2xl bg-white p-3.5 sm:p-5 shadow-2xl flex items-center justify-center relative border border-stone-200/20">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={qrData.imageUrl}
+                            alt="Razorpay Dynamic UPI QR"
+                            className={`w-full h-full object-contain select-none transition-all duration-200 ${
+                              isExpired ? 'opacity-25 grayscale' : 'opacity-100'
+                            }`}
+                          />
+                          {/* Expiration Overlay */}
+                          {isExpired && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-stone-950/85 backdrop-blur-sm rounded-2xl text-center space-y-3 animate-in fade-in duration-150">
+                              <Clock className="w-8 h-8 text-rose-400" />
+                              <div>
+                                <p className="text-base font-semibold text-stone-100">QR Code Expired</p>
+                                <p className="text-xs text-stone-400 mt-0.5">Session expired for payment security</p>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => { setQrData(null); loadDynamicQr(); }}
+                                className="h-8 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium text-xs rounded-lg flex items-center gap-1.5 shadow-lg"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Regenerate QR Code</span>
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => { setQrData(null); loadDynamicQr(); }}
-                              className="h-8 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium text-xs rounded-lg flex items-center gap-1.5 shadow-lg"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Regenerate QR Code</span>
-                            </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div className="w-full h-full flex-1 flex flex-col items-center justify-center py-8 text-center space-y-3 min-h-[340px]">
@@ -901,32 +925,7 @@ export function PaymentModal({
                         </Button>
                       </div>
                     )}
-
-                    {/* Manual "I have paid" confirmation button */}
-                    {qrData && !isExpired && (
-                      <div className="w-full pt-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleManualVerifyClick}
-                          disabled={isCheckingManual}
-                          className="w-full h-10 border-stone-800 bg-stone-900/60 hover:bg-stone-800 text-stone-200 hover:text-amber-300 text-xs sm:text-sm font-medium rounded-xl flex items-center justify-center gap-2 transition-all"
-                        >
-                          {isCheckingManual ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                              <span>Checking payment status with bank...</span>
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Paid via UPI? Check Status Now</span>
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  </>
                 )}
               </div>
             </div>
