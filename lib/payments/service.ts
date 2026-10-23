@@ -1026,13 +1026,28 @@ export async function checkQrPaymentStatus(
     }
 
     // 2. Query Razorpay API for this QR code
-    const paymentsList = await fetchRazorpayQrPayments(qrId);
+    let paymentsList: any = null;
+    try {
+      paymentsList = await fetchRazorpayQrPayments(qrId);
+    } catch (fetchErr: any) {
+      console.warn('[Payments] fetchRazorpayQrPayments non-fatal error:', fetchErr?.message);
+    }
+
     const capturedPayment = paymentsList?.items?.find((p: any) => p.status === 'captured');
 
     if (!capturedPayment) {
       // Fallback check on QR entity status
-      const qrEntity = await fetchRazorpayQrCode(qrId);
-      if (qrEntity && qrEntity.payments_amount_received >= obligation.amount_paise) {
+      let qrEntity: any = null;
+      try {
+        qrEntity = await fetchRazorpayQrCode(qrId);
+      } catch (fetchQrErr: any) {
+        console.warn('[Payments] fetchRazorpayQrCode non-fatal error:', fetchQrErr?.message);
+      }
+
+      if (
+        qrEntity &&
+        (qrEntity.payments_amount_received >= obligation.amount_paise || qrEntity.status === 'closed')
+      ) {
         const paidAt = new Date().toISOString();
         if (usingSandbox) {
           obligation.status = 'PAID';
