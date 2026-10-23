@@ -115,6 +115,12 @@ const config: Config = {
         'card': '0 1px 3px 0 rgba(20, 20, 20, 0.05)',
         'shelf': '0 12px 24px -6px rgba(20, 20, 20, 0.15)',
       },
+      borderRadius: {
+        xs: '2px',
+      },
+      spacing: {
+        '4.5': '1.125rem',
+      },
     },
   },
   plugins: [],

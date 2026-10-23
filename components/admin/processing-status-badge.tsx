@@ -25,22 +25,22 @@ export function ProcessingStatusBadge({
   const getIcon = () => {
     switch (safeStatus) {
       case 'COMPLETED':
-        return <CheckCircle2 className="w-3 h-3 text-emerald-600" />;
+        return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />;
       case 'PROCESSING':
-        return <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />;
+        return <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />;
       case 'QUEUED':
-        return <Clock className="w-3 h-3 text-amber-600" />;
+        return <Clock className="w-3.5 h-3.5 text-amber-600" />;
       case 'FAILED':
-        return <AlertTriangle className="w-3 h-3 text-rose-600" />;
+        return <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />;
       default:
-        return <FileQuestion className="w-3 h-3 text-stone-500" />;
+        return <FileQuestion className="w-3.5 h-3.5 text-stone-500" />;
     }
   };
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-[11px] font-medium border font-mono tracking-wide',
+        'inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs sm:text-[13px] font-medium border font-sans tracking-normal',
         config.bg,
         config.text,
         config.border,

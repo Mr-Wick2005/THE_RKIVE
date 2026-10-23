@@ -20,6 +20,10 @@ tsconfig.tsbuildinfo
 .env.test.local
 .env.production.local
 *.env*.local
+.dev-credentials.local
+*.credentials.local
+supabase/*.local.sql
+supabase/development_setup.sql
 
 # Debug and runtime logs
 npm-debug.log*

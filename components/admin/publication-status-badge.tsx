@@ -75,14 +75,14 @@ export function PublicationStatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-sm px-2.5 py-0.5 text-[11px] font-medium border font-mono tracking-wide',
+        'inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs sm:text-[13px] font-medium border font-sans tracking-normal',
         config.bg,
         config.text,
         config.border,
         className
       )}
     >
-      {showIcon && <Icon className="w-3 h-3" />}
+      {showIcon && <Icon className="w-3.5 h-3.5" />}
       <span>{config.label}</span>
     </span>
   );

@@ -50,36 +50,36 @@ export function StatusHistoryTimeline({ history }: StatusHistoryTimelineProps) {
                       <div className="flex items-center gap-2">
                         {event.from_status && (
                           <>
-                            <span className="text-xs text-[#77736C] font-mono">
+                            <span className="text-xs sm:text-[13px] text-[#55524D] font-mono">
                               {MAGAZINE_STATUS_LABELS[event.from_status as MagazineStatus]}
                             </span>
                             <span className="text-xs text-[#77736C]">→</span>
                           </>
                         )}
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${toColors.bg} ${toColors.text} ${toColors.border}`}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold border ${toColors.bg} ${toColors.text} ${toColors.border}`}
                         >
                           {MAGAZINE_STATUS_LABELS[event.to_status as MagazineStatus]}
                         </span>
                       </div>
                       <time
                         dateTime={event.created_at}
-                        className="text-[10px] font-mono text-[#77736C]"
+                        className="text-xs font-mono text-[#55524D]"
                         title={formatDate(event.created_at)}
                       >
                         {formatTimeAgo(event.created_at)}
                       </time>
                     </div>
 
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-[#44423E]">
+                    <div className="mt-1 flex items-center gap-1.5 text-sm text-[#33312E]">
                       <User className="w-3.5 h-3.5 text-[#77736C]" />
                       <span>{event.profile?.full_name || 'System / Administrator'}</span>
                     </div>
 
                     {event.note && (
-                      <div className="mt-2 text-xs bg-[#F8F6F1] border border-[#E8E2D8] p-2.5 rounded-sm text-[#171717]">
+                      <div className="mt-2 text-sm bg-[#F8F6F1] border border-[#E8E2D8] p-3 rounded-sm text-[#171717]">
                         <div className="flex items-start gap-1.5">
-                          <MessageSquare className="w-3.5 h-3.5 text-[#B58A55] mt-0.5 shrink-0" />
+                          <MessageSquare className="w-4 h-4 text-[#B58A55] mt-0.5 shrink-0" />
                           <p className="leading-relaxed whitespace-pre-wrap">{event.note}</p>
                         </div>
                       </div>

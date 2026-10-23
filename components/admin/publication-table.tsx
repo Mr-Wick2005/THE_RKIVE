@@ -9,6 +9,7 @@ import { PublicationStatusBadge } from './publication-status-badge';
 import { ProcessingStatusBadge } from './processing-status-badge';
 import { ConfirmSubmitDialog } from './confirm-submit-dialog';
 import { ConfirmDeleteDialog } from './confirm-delete-dialog';
+import { PaymentModal } from './payment-modal';
 import { AdminEmptyState } from './admin-empty-state';
 import { formatDate } from '@/lib/utils';
 import {
@@ -16,6 +17,8 @@ import {
   deleteMagazineAction,
   retryMagazineProcessingAction,
 } from '@/app/actions/magazines';
+import { getMagazinePaymentDetailsAction } from '@/app/actions/payments';
+import { PAYMENT_CONFIG } from '@/lib/payments/config';
 import {
   FileEdit,
   Trash2,
@@ -43,6 +46,13 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
   // Submit modal state
   const [submittingMag, setSubmittingMag] = useState<MagazineWithRelations | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Payment modal state
+  const [paymentModalMag, setPaymentModalMag] = useState<MagazineWithRelations | null>(null);
+  const [paymentFeePaise, setPaymentFeePaise] = useState<number>(PAYMENT_CONFIG.DEFAULT_SUBMISSION_FEE_PAISE);
+  const [paymentInitialStatus, setPaymentInitialStatus] = useState<string>('PENDING');
+  const [paymentExistingUtr, setPaymentExistingUtr] = useState<string | undefined>(undefined);
+  const [isCheckingPayment, setIsCheckingPayment] = useState<string | null>(null);
 
   // Delete modal state
   const [deletingMag, setDeletingMag] = useState<MagazineWithRelations | null>(null);
@@ -81,7 +91,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
     return matchesSearch && matchesStatus;
   });
 
-  const handleStartSubmit = (mag: MagazineWithRelations) => {
+  const handleStartSubmit = async (mag: MagazineWithRelations) => {
     if (mag.processing_status !== 'COMPLETED') {
       if (!mag.original_pdf_url) {
         setFeedback({
@@ -103,7 +113,33 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       });
       return;
     }
-    setSubmittingMag(mag);
+
+    // FINANCIAL GATING: Check if publication has confirmed payment obligation
+    setIsCheckingPayment(mag.id);
+    setFeedback(null);
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const payRes = await getMagazinePaymentDetailsAction(mag.id, session?.access_token);
+      const isPaid = payRes.success && payRes.data?.obligation?.status === 'PAID';
+
+      if (isPaid) {
+        // Already paid: Proceed through existing editorial confirmation dialog
+        setSubmittingMag(mag);
+      } else {
+        // Unpaid: Open payment modal directly, DO NOT open ConfirmSubmitDialog
+        setPaymentFeePaise(payRes.data?.obligation?.amount_paise || payRes.data?.currentFeePaise || PAYMENT_CONFIG.DEFAULT_SUBMISSION_FEE_PAISE);
+        setPaymentInitialStatus(payRes.data?.obligation?.status || 'PENDING');
+        setPaymentExistingUtr(payRes.data?.manualClaim?.utr_reference);
+        setPaymentModalMag(mag);
+      }
+    } catch (err: any) {
+      console.error('[Payments] Failed to check payment status:', err);
+      setPaymentModalMag(mag);
+    } finally {
+      setIsCheckingPayment(null);
+    }
   };
 
   const handleRetryProcessing = async (id: string, title: string) => {
@@ -206,7 +242,7 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       {/* Feedback Banner */}
       {feedback && (
         <div
-          className={`p-4 rounded-sm border text-xs flex items-center justify-between ${
+          className={`p-4 rounded-sm border text-sm flex items-center justify-between ${
             feedback.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
@@ -214,15 +250,15 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
         >
           <div className="flex items-center gap-2">
             {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600" />
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
             )}
             <span className="font-medium">{feedback.message}</span>
           </div>
           <button
             onClick={() => setFeedback(null)}
-            className="text-xs underline hover:opacity-75"
+            className="text-sm underline hover:opacity-75 font-medium ml-4 shrink-0"
           >
             Dismiss
           </button>
@@ -232,22 +268,22 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-sm bg-white border border-[#E8E2D8] shadow-sm">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#77736C]" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#77736C]" />
           <input
             type="text"
             placeholder="Search publication title or year..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 text-xs rounded-sm border border-[#E8E2D8] text-[#171717] placeholder:text-[#9A958E] focus:outline-none focus:border-[#171717]"
+            className="w-full h-11 pl-10 pr-3 text-sm rounded-sm border border-[#E8E2D8] text-[#171717] placeholder:text-[#77736C] focus:outline-none focus:border-[#171717]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-3.5 h-3.5 text-[#77736C]" />
+          <Filter className="w-4 h-4 text-[#77736C]" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 text-xs rounded-sm border border-[#E8E2D8] bg-white text-[#171717] focus:outline-none focus:border-[#171717] w-full sm:w-auto"
+            className="h-11 px-3 text-sm rounded-sm border border-[#E8E2D8] bg-white text-[#171717] focus:outline-none focus:border-[#171717] w-full sm:w-auto"
           >
             <option value="ALL">All Statuses ({magazines.length})</option>
             <option value="DRAFT">Drafts</option>
@@ -263,22 +299,22 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
       {/* Publications Table */}
       <div className="border border-[#E8E2D8] bg-white rounded-sm shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[#E8E2D8] bg-[#F8F6F1]/80 text-[#77736C] font-mono uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-4 font-semibold">Publication</th>
-                <th className="py-3 px-4 font-semibold">Academic Year</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold">PDF Processing</th>
-                <th className="py-3 px-4 font-semibold">Last Updated</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              <tr className="border-b border-[#E8E2D8] bg-[#F8F6F1]/80 text-[#55524D] font-mono uppercase text-xs tracking-wider">
+                <th className="py-3.5 px-4 font-semibold">Publication</th>
+                <th className="py-3.5 px-4 font-semibold">Academic Year</th>
+                <th className="py-3.5 px-4 font-semibold">Status</th>
+                <th className="py-3.5 px-4 font-semibold">PDF Processing</th>
+                <th className="py-3.5 px-4 font-semibold">Last Updated</th>
+                <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-[#F0EBE1]">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-xs text-[#77736C]">
+                  <td colSpan={6} className="py-12 text-center text-sm text-[#77736C]">
                     No publications match the active filter criteria.
                   </td>
                 </tr>
@@ -295,10 +331,10 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                   return (
                     <tr key={mag.id} className="hover:bg-[#F8F6F1]/50 transition-colors">
                       {/* Cover & Title */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-4 px-4">
                         <div className="flex items-center gap-3.5">
                           {/* Mini Cover Thumbnail */}
-                          <div className="relative w-11 h-14 rounded-sm overflow-hidden bg-[#E8E2D8] border border-[#171717]/10 flex-shrink-0 flex items-center justify-center shadow-sm">
+                          <div className="relative w-12 h-16 rounded-sm overflow-hidden bg-[#E8E2D8] border border-[#171717]/10 flex-shrink-0 flex items-center justify-center shadow-sm">
                             {mag.cover_image_url ? (
                               <Image
                                 src={mag.cover_image_url}
@@ -308,20 +344,20 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                                 className="object-cover"
                               />
                             ) : (
-                              <BookOpen className="w-4 h-4 text-[#77736C]" />
+                              <BookOpen className="w-5 h-5 text-[#77736C]" />
                             )}
                           </div>
 
                           <div className="min-w-0">
-                            <span className="font-serif text-sm font-medium text-[#171717] truncate block max-w-xs sm:max-w-sm">
+                            <span className="font-serif text-base sm:text-lg font-medium text-[#171717] truncate block max-w-xs sm:max-w-sm">
                               {mag.title}
                             </span>
                             {mag.subtitle && (
-                              <span className="text-[11px] text-[#77736C] truncate block max-w-xs">
+                              <span className="text-xs sm:text-[13px] text-[#55524D] truncate block max-w-xs sm:max-w-sm">
                                 {mag.subtitle}
                               </span>
                             )}
-                            <span className="text-[10px] font-mono text-[#9E7D3B]">
+                            <span className="text-xs font-mono text-[#8C6D2D] block mt-0.5">
                               {mag.department?.short_name || 'Dept'} • {mag.page_count} Pages
                             </span>
                           </div>
@@ -329,22 +365,22 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                       </td>
 
                       {/* Academic Year & Edition */}
-                      <td className="py-3.5 px-4 font-mono text-[11px]">
-                        <span className="text-[#171717] block font-medium">
+                      <td className="py-4 px-4 font-mono">
+                        <span className="text-sm font-medium text-[#171717] block">
                           {mag.academic_year}
                         </span>
-                        <span className="text-[#77736C] text-[10px] block">
+                        <span className="text-xs text-[#55524D] block mt-0.5">
                           {mag.edition || 'Annual Issue'}
                         </span>
                       </td>
 
                       {/* Publication Status */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-4 px-4">
                         <PublicationStatusBadge status={mag.status} />
                       </td>
 
                       {/* Document Processing Status */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
                           <ProcessingStatusBadge
                             status={mag.processing_status}
@@ -355,14 +391,14 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                               type="button"
                               onClick={() => handleRetryProcessing(mag.id, mag.title)}
                               disabled={retryingId === mag.id}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono rounded-sm border transition-colors cursor-pointer ${
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-sm border transition-colors cursor-pointer min-h-[30px] ${
                                 isProcessingFailed
                                   ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
                                   : 'border-[#171717]/20 bg-white text-[#171717] hover:bg-[#171717] hover:text-[#F8F6F1]'
                               }`}
                               title={isProcessingFailed ? 'Retry PDF Processing' : 'Generate WebP Pages from PDF'}
                             >
-                              <RefreshCw className={`w-2.5 h-2.5 ${retryingId === mag.id ? 'animate-spin' : ''}`} />
+                              <RefreshCw className={`w-3 h-3 ${retryingId === mag.id ? 'animate-spin' : ''}`} />
                               <span>{isProcessingFailed ? 'Retry' : 'Process PDF'}</span>
                             </button>
                           )}
@@ -370,20 +406,20 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                       </td>
 
                       {/* Updated Date */}
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-[#77736C]">
+                      <td className="py-4 px-4 font-mono text-xs text-[#55524D]">
                         {formatDate(mag.updated_at)}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {/* Edit Action */}
                           {canEdit && (
                             <Link
                               href={`/admin/magazines/${mag.id}/edit`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-[#E8E2D8] bg-white text-[#171717] hover:bg-[#171717] hover:text-[#F8F6F1] hover:border-[#171717] transition-all text-xs"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#E8E2D8] bg-white text-[#171717] hover:bg-[#171717] hover:text-[#F8F6F1] hover:border-[#171717] transition-all text-sm font-medium min-h-[36px]"
                             >
-                              <FileEdit className="w-3 h-3" />
+                              <FileEdit className="w-3.5 h-3.5" />
                               <span>Edit</span>
                             </Link>
                           )}
@@ -393,9 +429,14 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                             <button
                               type="button"
                               onClick={() => handleStartSubmit(mag)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-[#171717] text-[#F8F6F1] hover:bg-[#2C2C2A] transition-all text-xs shadow-sm font-medium"
+                              disabled={isCheckingPayment === mag.id}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-sm bg-[#171717] text-[#F8F6F1] hover:bg-[#2C2C2A] transition-all text-sm shadow-sm font-medium disabled:opacity-60 min-h-[36px]"
                             >
-                              <Send className="w-3 h-3 text-[#B58A55]" />
+                              {isCheckingPayment === mag.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 text-[#B58A55] animate-spin" />
+                              ) : (
+                                <Send className="w-3.5 h-3.5 text-[#B58A55]" />
+                              )}
                               <span>Submit</span>
                             </button>
                           )}
@@ -405,9 +446,9 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                             <Link
                               href={`/magazine/${mag.slug}`}
                               target="_blank"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-[#E8E2D8] bg-white text-[#171717] hover:bg-[#F0EBE1] transition-all text-xs"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#E8E2D8] bg-white text-[#171717] hover:bg-[#F0EBE1] transition-all text-sm font-medium min-h-[36px]"
                             >
-                              <Eye className="w-3 h-3" />
+                              <Eye className="w-3.5 h-3.5" />
                               <span>View</span>
                             </Link>
                           )}
@@ -416,11 +457,10 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
                           <button
                             type="button"
                             onClick={() => handleStartDelete(mag)}
-                            className="p-1.5 text-[#77736C] hover:text-rose-700 hover:bg-rose-50 rounded-sm transition-colors cursor-pointer"
+                            className="p-2 text-[#77736C] hover:text-rose-700 hover:bg-rose-50 rounded-sm transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
                             title="Delete Publication"
-                            aria-label={`Delete ${mag.title}`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -432,6 +472,25 @@ export function PublicationTable({ magazines }: PublicationTableProps) {
           </table>
         </div>
       </div>
+
+      {/* Payment Gateway & Manual UPI Modal */}
+      {paymentModalMag && (
+        <PaymentModal
+          isOpen={Boolean(paymentModalMag)}
+          onClose={() => setPaymentModalMag(null)}
+          magazineId={paymentModalMag.id}
+          magazineTitle={paymentModalMag.title}
+          departmentName={paymentModalMag.department?.name}
+          feePaise={paymentFeePaise}
+          initialStatus={paymentInitialStatus}
+          existingUtr={paymentExistingUtr}
+          onPaymentSuccess={() => {
+            const targetMag = paymentModalMag;
+            setPaymentModalMag(null);
+            setSubmittingMag(targetMag);
+          }}
+        />
+      )}
 
       {/* Submit Confirmation Modal */}
       {submittingMag && (

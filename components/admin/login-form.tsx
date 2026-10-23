@@ -150,8 +150,17 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="pt-4 border-t border-[#1A1A1A]/15 text-xs text-[#706B62]">
-        <p className="leading-relaxed">
+      <div className="pt-4 border-t border-[#1A1A1A]/15 space-y-2 text-xs text-[#706B62]">
+        <div className="flex items-center justify-between">
+          <span>First-time institutional setup?</span>
+          <a
+            href="/admin/setup"
+            className="font-semibold text-[#1A1A1A] hover:text-[#1B44B8] underline"
+          >
+            Provision Super Admin &rarr;
+          </a>
+        </div>
+        <p className="leading-relaxed text-[11px] opacity-80">
           Access is strictly restricted to assigned <strong>Super Admins</strong> and <strong>Department Admins</strong> governed by PostgreSQL Row Level Security.
         </p>
       </div>

@@ -6,17 +6,115 @@ import { getCurrentProfile } from '@/lib/auth/session';
 import { isSupabaseConfigured } from '@/lib/utils';
 import { ActionResult } from './magazines';
 
+import { isSuperAdminBootstrapAvailable } from '@/lib/auth/bootstrap';
+
 /**
  * Server action to bootstrap the very first Super Admin.
  * Permanently disabled once any SUPER_ADMIN exists in the institutional database.
  */
 export async function bootstrapFirstSuperAdminAction(
-  _formData: FormData
+  formData: FormData
 ): Promise<ActionResult & { email?: string }> {
-  return {
-    success: false,
-    error: 'Super Admin setup is permanently unavailable. Use the existing authorized account.',
-  };
+  try {
+    const isAvailable = await isSuperAdminBootstrapAvailable();
+    if (!isAvailable) {
+      return {
+        success: false,
+        error: 'Super Admin setup is locked. A Super Administrator is already provisioned for this platform.',
+      };
+    }
+
+    const fullName = (formData.get('full_name') as string)?.trim();
+    const email = (formData.get('email') as string)?.trim().toLowerCase();
+    const password = (formData.get('password') as string)?.trim();
+    const confirmPassword = (formData.get('confirm_password') as string)?.trim();
+
+    if (!fullName) {
+      return { success: false, error: 'Full legal/academic name is required.' };
+    }
+
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'A valid institutional email address is required.' };
+    }
+
+    if (!password || password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters long.' };
+    }
+
+    if (password !== confirmPassword) {
+      return { success: false, error: 'Passwords do not match.' };
+    }
+
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase is not configured.' };
+    }
+
+    const supabase = createAdminClient();
+
+    // 1. Create the user in Supabase Auth via admin API
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+      app_metadata: { role: 'SUPER_ADMIN' },
+    });
+
+    let userId = authData?.user?.id;
+
+    if (authError || !userId) {
+      // If user already exists in Auth, check if they can be upgraded to the founding Super Admin
+      if (authError?.message?.toLowerCase().includes('already')) {
+        const { data: usersList } = await supabase.auth.admin.listUsers();
+        const existing = usersList?.users?.find((u) => u.email?.toLowerCase() === email);
+        if (existing) {
+          userId = existing.id;
+          await supabase.auth.admin.updateUserById(userId, {
+            password,
+            email_confirm: true,
+            app_metadata: { role: 'SUPER_ADMIN' },
+            user_metadata: { full_name: fullName },
+          });
+        }
+      }
+
+      if (!userId) {
+        return {
+          success: false,
+          error: authError?.message || 'Failed to create Super Admin user in Supabase Auth.',
+        };
+      }
+    }
+
+    // 2. Insert or update the public.profiles record
+    const { error: profileError } = await (supabase.from('profiles') as any).upsert({
+      id: userId,
+      full_name: fullName,
+      email,
+      role: 'SUPER_ADMIN',
+      department_id: null,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (profileError) {
+      return {
+        success: false,
+        error: `Authentication account created, but profile setup failed: ${profileError.message}. Ensure database schema is applied.`,
+      };
+    }
+
+    revalidatePath('/admin');
+    revalidatePath('/admin/dashboard');
+
+    return { success: true, email };
+  } catch (err: any) {
+    console.error('Error in bootstrapFirstSuperAdminAction:', err);
+    return {
+      success: false,
+      error: err.message || 'An unexpected error occurred during Super Admin setup.',
+    };
+  }
 }
 
 /**

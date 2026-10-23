@@ -31,19 +31,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none tracking-wider uppercase font-nav text-sm';
+      'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none font-sans text-sm whitespace-nowrap shrink-0 overflow-visible';
 
     const variants = {
       // Primary / Ink variants
       primary:
-        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm active:translate-y-px',
+        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm',
       ink:
-        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm active:translate-y-px',
+        'bg-ink text-paper-50 hover:bg-ink-light border border-ink focus:ring-ink shadow-editorial-sm',
       // Editorial color accents
       terracotta:
-        'bg-terracotta text-paper-50 hover:bg-terracotta-700 border border-terracotta focus:ring-terracotta shadow-editorial-sm active:translate-y-px',
+        'bg-terracotta text-paper-50 hover:bg-terracotta-700 border border-terracotta focus:ring-terracotta shadow-editorial-sm',
       cobalt:
-        'bg-cobalt text-paper-50 hover:bg-cobalt-700 border border-cobalt focus:ring-cobalt shadow-editorial-sm active:translate-y-px',
+        'bg-cobalt text-paper-50 hover:bg-cobalt-700 border border-cobalt focus:ring-cobalt shadow-editorial-sm',
       // Secondary / Paper variants
       secondary:
         'bg-paper-300 text-ink hover:bg-paper-400 border border-ink/15 focus:ring-ink/40',
@@ -51,7 +51,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         'bg-paper-100 text-ink hover:bg-paper-50 border border-ink/20 focus:ring-ink/40 shadow-card',
       // Outline / Ghost / Danger
       outline:
-        'border border-ink/25 bg-paper-50/80 text-ink hover:bg-ink hover:text-paper-50 hover:border-ink focus:ring-ink transition-colors',
+        'border border-ink/25 bg-white text-ink hover:bg-ink hover:text-paper-50 hover:border-ink focus:ring-ink shadow-xs transition-colors',
       ghost:
         'text-graphite hover:text-ink hover:bg-paper-300/40 focus:ring-ink/20',
       danger:
@@ -59,10 +59,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizes = {
-      sm: 'text-xs px-3.5 py-2 rounded-xs gap-1.5',
-      md: 'text-sm px-5 py-2.5 rounded-xs gap-2',
-      lg: 'text-base px-7 py-3.5 rounded-xs gap-2.5',
-      icon: 'p-2.5 rounded-xs aspect-square',
+      sm: 'text-xs sm:text-sm px-3.5 py-1.5 min-h-[36px] rounded-sm gap-1.5',
+      md: 'text-sm px-4 py-2 min-h-[40px] rounded-sm gap-2',
+      lg: 'text-base px-6 py-2.5 min-h-[46px] rounded-sm gap-2.5',
+      icon: 'p-2 rounded-sm aspect-square min-h-[38px] min-w-[38px] flex items-center justify-center',
     };
 
     return (

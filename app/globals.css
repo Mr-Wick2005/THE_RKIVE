@@ -167,26 +167,25 @@
 
   .font-metadata {
     font-family: 'Space Mono', 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     font-weight: 500;
   }
 
   .font-label {
-    font-family: 'Space Mono', 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.14em;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.8125rem;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .font-nav {
-    font-family: 'Space Mono', 'JetBrains Mono', monospace;
-    font-size: 0.8125rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 600;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    font-weight: 500;
   }
 
   /* ========================================================================= */

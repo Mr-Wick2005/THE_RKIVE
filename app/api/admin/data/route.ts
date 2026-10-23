@@ -18,6 +18,8 @@ import { isR2ServerConfigured, createR2PresignedUploadUrl } from '@/lib/storage/
 import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { MagazineStatus } from '@/types/magazine';
+import { hasValidPaidObligation, getPlatformFeePaise } from '@/lib/payments/service';
+import { formatPaiseToRupees } from '@/lib/payments/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -519,6 +521,14 @@ export async function POST(request: Request) {
 
         if (existing.processing_status !== 'COMPLETED') {
           return NextResponse.json({ error: 'This publication must finish processing before it can be submitted for review.' }, { status: 400 });
+        }
+
+        const isPaid = await hasValidPaidObligation(supabase, id);
+        if (!isPaid) {
+          const feePaise = await getPlatformFeePaise(supabase);
+          return NextResponse.json({
+            error: `Payment Required: A verified submission fee (${formatPaiseToRupees(feePaise)}) must be confirmed before submitting for review.`,
+          }, { status: 402 });
         }
 
         const { error: updateError } = await (supabase

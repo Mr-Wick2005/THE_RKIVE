@@ -97,15 +97,15 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 text-xs font-medium transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 text-sm transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-[#171717] text-[#171717] font-semibold'
-                  : 'border-transparent text-[#77736C] hover:text-[#171717] hover:border-[#E8E2D8]'
+                  : 'border-transparent text-[#77736C] hover:text-[#171717] hover:border-[#E8E2D8] font-medium'
               }`}
             >
               <span>{tab.label}</span>
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+                className={`px-2 py-0.5 rounded-full text-xs font-mono font-medium ${
                   activeTab === tab.id
                     ? 'bg-[#171717] text-[#F8F6F1]'
                     : 'bg-[#F8F6F1] text-[#77736C]'
@@ -121,22 +121,22 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-sm border border-[#E8E2D8]">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#77736C]" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#77736C]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by publication or department..."
-            className="w-full pl-9 pr-3 py-1.5 bg-[#F8F6F1] border border-[#E8E2D8] rounded-sm text-xs text-[#171717] placeholder:text-[#77736C] focus:outline-none focus:ring-1 focus:ring-[#171717]"
+            className="w-full h-11 pl-10 pr-3 bg-[#F8F6F1] border border-[#E8E2D8] rounded-sm text-sm text-[#171717] placeholder:text-[#77736C] focus:outline-none focus:ring-1 focus:ring-[#171717]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-3.5 h-3.5 text-[#77736C]" />
+          <Filter className="w-4 h-4 text-[#77736C] shrink-0" />
           <select
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            className="w-full sm:w-auto px-3 py-1.5 bg-[#F8F6F1] border border-[#E8E2D8] rounded-sm text-xs text-[#171717] focus:outline-none focus:ring-1 focus:ring-[#171717]"
+            className="w-full sm:w-auto h-11 px-3 bg-[#F8F6F1] border border-[#E8E2D8] rounded-sm text-sm text-[#171717] focus:outline-none focus:ring-1 focus:ring-[#171717]"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -152,29 +152,29 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
       {filteredMagazines.length === 0 ? (
         <div className="bg-white border border-[#E8E2D8] rounded-sm p-12 text-center">
           <Inbox className="w-10 h-10 text-[#77736C] mx-auto mb-3 stroke-[1.5]" />
-          <h3 className="font-serif text-base font-semibold text-[#171717]">
+          <h3 className="font-serif text-lg font-semibold text-[#171717]">
             No publications in this queue
           </h3>
-          <p className="text-xs text-[#77736C] mt-1 max-w-sm mx-auto">
+          <p className="text-sm text-[#55524D] mt-1 max-w-sm mx-auto">
             {activeTab === 'SUBMITTED'
               ? 'There are currently no new departmental submissions waiting for review.'
               : 'No matching publications found for the selected filter.'}
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-[#E8E2D8] rounded-sm overflow-hidden shadow-xs">
-          <table className="w-full text-left border-collapse">
+        <div className="bg-white border border-[#E8E2D8] rounded-sm overflow-x-auto shadow-xs">
+          <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
-              <tr className="border-b border-[#E8E2D8] bg-[#F8F6F1] text-[11px] font-mono uppercase tracking-wider text-[#77736C]">
-                <th className="py-3 px-4">Publication</th>
-                <th className="py-3 px-4">Department</th>
-                <th className="py-3 px-4">Academic Year</th>
-                <th className="py-3 px-4">Pages / Status</th>
-                <th className="py-3 px-4">Updated</th>
-                <th className="py-3 px-4 text-right">Action</th>
+              <tr className="border-b border-[#E8E2D8] bg-[#F8F6F1] text-xs font-mono uppercase tracking-wider text-[#77736C]">
+                <th className="py-3.5 px-4 font-medium">Publication</th>
+                <th className="py-3.5 px-4 font-medium">Department</th>
+                <th className="py-3.5 px-4 font-medium">Academic Year</th>
+                <th className="py-3.5 px-4 font-medium">Pages / Status</th>
+                <th className="py-3.5 px-4 font-medium">Updated</th>
+                <th className="py-3.5 px-4 text-right font-medium">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E8E2D8] text-xs">
+            <tbody className="divide-y divide-[#E8E2D8] text-sm">
               {filteredMagazines.map((mag) => {
                 return (
                   <tr
@@ -182,19 +182,19 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
                     className="hover:bg-[#FDFBF7] transition-colors group"
                   >
                     {/* Cover & Title */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-14 bg-stone-100 border border-[#E8E2D8] rounded-xs overflow-hidden shrink-0 relative">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-16 bg-stone-100 border border-[#E8E2D8] rounded-xs overflow-hidden shrink-0 relative">
                           {mag.cover_image_url ? (
                             <Image
                               src={mag.cover_image_url}
                               alt={mag.title}
                               fill
                               className="object-cover"
-                              sizes="40px"
+                              sizes="48px"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[9px] font-mono text-[#77736C]">
+                            <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-[#77736C]">
                               Cover
                             </div>
                           )}
@@ -202,16 +202,16 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
                         <div>
                           <Link
                             href={`/admin/review/${mag.id}`}
-                            className="font-serif font-semibold text-[#171717] hover:text-[#B58A55] transition-colors block line-clamp-1"
+                            className="font-serif text-base sm:text-lg font-semibold text-[#171717] hover:text-[#B58A55] transition-colors block line-clamp-1"
                           >
                             {mag.title}
                           </Link>
                           {mag.subtitle && (
-                            <p className="text-[11px] text-[#77736C] line-clamp-1">
+                            <p className="text-xs sm:text-[13px] text-[#55524D] line-clamp-1 mt-0.5">
                               {mag.subtitle}
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1.5">
                             <PublicationStatusBadge status={mag.status} />
                           </div>
                         </div>
@@ -219,30 +219,30 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
                     </td>
 
                     {/* Department */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5 text-[#171717]">
-                        <Building2 className="w-3.5 h-3.5 text-[#77736C] shrink-0" />
-                        <span className="font-medium">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2 text-[#171717]">
+                        <Building2 className="w-4 h-4 text-[#77736C] shrink-0" />
+                        <span className="font-medium text-sm">
                           {mag.department?.name || 'College Wide'}
                         </span>
                       </div>
                     </td>
 
                     {/* Academic Year */}
-                    <td className="py-3.5 px-4 font-mono text-[#44423E]">
+                    <td className="py-4 px-4 font-mono text-[#33312E] text-sm">
                       {mag.academic_year}
                       {mag.edition && (
-                        <span className="block text-[10px] text-[#77736C]">
+                        <span className="block text-xs text-[#77736C] font-sans mt-0.5">
                           {mag.edition}
                         </span>
                       )}
                     </td>
 
                     {/* Pages & Processing */}
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-[#44423E]">
-                          <Layers className="w-3 h-3 text-[#77736C]" />
+                    <td className="py-4 px-4">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-[#44423E] text-xs sm:text-sm">
+                          <Layers className="w-3.5 h-3.5 text-[#77736C]" />
                           <span>{mag.page_count || 0} pages</span>
                         </div>
                         <ProcessingStatusBadge status={mag.processing_status} />
@@ -250,15 +250,15 @@ export function ReviewQueueTable({ initialMagazines }: ReviewQueueTableProps) {
                     </td>
 
                     {/* Updated */}
-                    <td className="py-3.5 px-4 text-[#77736C] font-mono text-[11px]">
+                    <td className="py-4 px-4 text-[#55524D] font-mono text-xs sm:text-[13px]">
                       {formatTimeAgo(mag.updated_at)}
                     </td>
 
                     {/* Action Button */}
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-4 px-4 text-right">
                       <Link
                         href={`/admin/review/${mag.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#171717] text-[#F8F6F1] hover:bg-[#33312E] rounded-sm text-xs font-medium transition-colors shadow-xs"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#171717] text-[#F8F6F1] hover:bg-[#33312E] rounded-sm text-sm font-medium transition-colors shadow-xs min-h-[36px]"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Review</span>

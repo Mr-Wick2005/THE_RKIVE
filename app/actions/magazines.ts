@@ -9,6 +9,8 @@ import { processMagazinePdf } from '@/lib/pdf/pipeline';
 import { dispatchWorkerContinuation } from '@/lib/pdf/queue';
 import { isSupabaseConfigured } from '@/lib/utils';
 import { MagazineProcessingStatus, MagazineStatus } from '@/types/magazine';
+import { hasValidPaidObligation, getPlatformFeePaise } from '@/lib/payments/service';
+import { formatPaiseToRupees } from '@/lib/payments/config';
 
 export interface ActionResult {
   success: boolean;
@@ -223,10 +225,20 @@ export async function updateMagazineAction(
       newPdfUploaded = true;
     }
 
-    if (submitForReview && (newPdfUploaded || existing.processing_status !== 'COMPLETED')) {
-      return { success: false, error: 'Save the PDF changes and wait for processing to complete before submitting for review.' };
+    if (submitForReview) {
+      if (newPdfUploaded || existing.processing_status !== 'COMPLETED') {
+        return { success: false, error: 'Save the PDF changes and wait for processing to complete before submitting for review.' };
+      }
+      const isPaid = await hasValidPaidObligation(supabase, id);
+      if (!isPaid) {
+        const feePaise = await getPlatformFeePaise(supabase);
+        return {
+          success: false,
+          error: `Payment Required: A verified submission fee (${formatPaiseToRupees(feePaise)}) must be confirmed before submitting for review.`,
+        };
+      }
+      updates.status = 'SUBMITTED';
     }
-    if (submitForReview) updates.status = 'SUBMITTED';
 
     const { error: updateError } = await (supabase
       .from('magazines') as any)
@@ -403,6 +415,16 @@ export async function submitMagazineForReviewAction(id: string, token?: string):
       return {
         success: false,
         error: 'This publication must finish processing before it can be submitted for review.',
+      };
+    }
+
+    // RULE 28: PAYMENT VERIFICATION GATING CHECK
+    const isPaid = await hasValidPaidObligation(supabase, id);
+    if (!isPaid) {
+      const feePaise = await getPlatformFeePaise(supabase);
+      return {
+        success: false,
+        error: `Payment Required: A verified submission fee (${formatPaiseToRupees(feePaise)}) must be confirmed before submitting for review.`,
       };
     }
 
@@ -671,6 +693,15 @@ export async function publishMagazineAction(id: string, token?: string): Promise
       return { success: false, error: `Publication must be in 'APPROVED' status before publishing. Current: '${existing.status}'.` };
     }
 
+    // FINANCIAL GATING: Verify confirmed payment obligation before publishing
+    const isPaid = await hasValidPaidObligation(supabase, id);
+    if (!isPaid) {
+      return {
+        success: false,
+        error: 'Cannot publish magazine: Confirmed payment obligation (PAID) is required.',
+      };
+    }
+
     const publishedAt = new Date().toISOString();
     const { error: updateError } = await (supabase.from('magazines') as any)
       .update({
@@ -793,6 +824,16 @@ export async function resubmitMagazineAction(id: string, token?: string): Promis
 
     if (!existing.original_pdf_url || existing.processing_status !== 'COMPLETED' || !existing.page_count) {
       return { success: false, error: 'Publication must have a processed PDF before resubmitting.' };
+    }
+
+    // GATING: Ensure the corrected magazine retains its confirmed payment obligation
+    const isPaid = await hasValidPaidObligation(supabase, id);
+    if (!isPaid) {
+      const feePaise = await getPlatformFeePaise(supabase);
+      return {
+        success: false,
+        error: `Payment Required: A verified submission fee (${formatPaiseToRupees(feePaise)}) is required to resubmit.`,
+      };
     }
 
     const { error: updateError } = await (supabase.from('magazines') as any)

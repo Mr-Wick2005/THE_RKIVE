@@ -31,10 +31,10 @@ export function ConfirmSubmitDialog({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#B58A55] block">
+              <span className="text-xs font-mono uppercase tracking-wider text-[#B58A55] font-medium block">
                 College Editorial Governance
               </span>
-              <h3 className="font-serif text-xl font-medium text-[#171717] mt-0.5">
+              <h3 className="font-serif text-xl sm:text-2xl font-medium text-[#171717] mt-0.5">
                 Submit Publication for Review?
               </h3>
             </div>
@@ -50,13 +50,13 @@ export function ConfirmSubmitDialog({
         </div>
 
         {/* Body Copy */}
-        <div className="space-y-3 text-xs text-[#44423E] leading-relaxed">
+        <div className="space-y-3.5 text-sm text-[#33312E] leading-relaxed">
           <p>
             You are submitting <strong>&ldquo;{publicationTitle}&rdquo;</strong> for institutional review.
           </p>
-          <div className="p-3.5 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] space-y-1.5 font-light">
-            <p className="font-medium text-[#171717]">What happens next:</p>
-            <ul className="list-disc list-inside space-y-1 text-[#77736C]">
+          <div className="p-4 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] space-y-2">
+            <p className="font-semibold text-[#171717]">What happens next:</p>
+            <ul className="list-disc list-inside space-y-1.5 text-[#55524D]">
               <li>Publication status will change from <strong>Draft</strong> to <strong>Submitted</strong>.</li>
               <li>College administrators will verify academic accreditation and formatting.</li>
               <li>Approved issues will subsequently be published to the public archive.</li>
@@ -69,22 +69,23 @@ export function ConfirmSubmitDialog({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="md"
             onClick={onCancel}
             disabled={isSubmitting}
+            className="text-sm min-h-[40px] px-4"
           >
             Keep as Draft
           </Button>
           <Button
             type="button"
             variant="primary"
-            size="sm"
+            size="md"
             onClick={onConfirm}
             isLoading={isSubmitting}
-            className="gap-1.5 bg-[#171717] hover:bg-[#2C2C2A]"
+            className="gap-2 bg-[#171717] hover:bg-[#2C2C2A] text-sm min-h-[40px] px-5"
           >
             <span>Confirm & Submit for Review</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       </div>

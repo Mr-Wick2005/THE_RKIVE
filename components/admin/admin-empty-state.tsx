@@ -20,11 +20,11 @@ export function AdminEmptyState({
         <BookOpen className="w-7 h-7" />
       </div>
 
-      <div className="space-y-1.5">
-        <h3 className="font-serif text-xl font-medium text-[#171717]">
+      <div className="space-y-2">
+        <h3 className="font-serif text-xl sm:text-2xl font-medium text-[#171717]">
           {title}
         </h3>
-        <p className="text-xs sm:text-sm text-[#77736C] max-w-md mx-auto leading-relaxed">
+        <p className="text-sm sm:text-base text-[#55524D] max-w-md mx-auto leading-relaxed">
           {description}
         </p>
       </div>

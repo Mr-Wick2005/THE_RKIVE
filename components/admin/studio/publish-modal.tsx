@@ -53,8 +53,8 @@ export function PublishModal({
         {/* Masthead */}
         <div className="bg-[#1A1A1A] text-[#FAF7F2] p-4 flex items-center justify-between border-b-2 border-[#1A1A1A]">
           <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-[#C24A26]" />
-            <span className="font-serif text-base font-bold">
+            <Shield className="w-5 h-5 text-[#C24A26]" />
+            <span className="font-serif text-lg font-bold">
               Publish Landing Page to Live
             </span>
           </div>
@@ -70,7 +70,7 @@ export function PublishModal({
         {/* Content */}
         <div className="p-6 space-y-5">
           {errorMsg && (
-            <div className="p-3 bg-rose-50 border-2 border-rose-600 text-rose-800 text-xs font-medium flex items-center gap-2">
+            <div className="p-3.5 bg-rose-50 border-2 border-rose-600 text-rose-800 text-sm font-medium flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
@@ -87,7 +87,7 @@ export function PublishModal({
             </div>
 
             <div className="text-right text-xs font-mono">
-              <span className="inline-flex items-center gap-1 text-[#2B6E3F] font-bold">
+              <span className="inline-flex items-center gap-1.5 text-[#2B6E3F] font-bold">
                 <CheckCircle2 className="w-4 h-4" />
                 Validation Clean
               </span>
@@ -96,14 +96,14 @@ export function PublishModal({
 
           {/* Change Summary */}
           <div className="space-y-2">
-            <label className="block text-xs font-mono font-bold uppercase text-[#1A1A1A]">
+            <label className="block text-sm font-mono font-bold uppercase text-[#1A1A1A]">
               Detected Section Updates
             </label>
-            <div className="flex flex-wrap gap-1.5 p-3 border-2 border-[#1A1A1A] bg-[#FAF7F2] max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-2 p-3 border-2 border-[#1A1A1A] bg-[#FAF7F2] max-h-32 overflow-y-auto">
               {changeSummary.map((item, idx) => (
                 <span
                   key={idx}
-                  className="text-xs font-mono font-semibold px-2 py-1 bg-[#1A1A1A] text-[#FAF7F2]"
+                  className="text-xs font-mono font-semibold px-2.5 py-1 bg-[#1A1A1A] text-[#FAF7F2]"
                 >
                   ✓ {item}
                 </span>
@@ -112,8 +112,8 @@ export function PublishModal({
           </div>
 
           {/* Release Note */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-mono font-bold uppercase text-[#1A1A1A]">
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-bold uppercase text-[#1A1A1A]">
               Release Audit Note (Optional)
             </label>
             <input
@@ -121,11 +121,11 @@ export function PublishModal({
               value={releaseNote}
               onChange={(e) => setReleaseNote(e.target.value)}
               placeholder={`e.g. Updated Hero Section & Featured Publications`}
-              className="w-full px-3 py-2 border-2 border-[#1A1A1A] bg-white text-xs font-medium focus:outline-none"
+              className="w-full h-11 px-3.5 border-2 border-[#1A1A1A] bg-white text-sm font-medium focus:outline-none"
             />
           </div>
 
-          <p className="text-[11px] text-[#55524D] leading-relaxed">
+          <p className="text-xs sm:text-[13px] text-[#55524D] leading-relaxed">
             Publishing will immediately render this configuration on the public homepage (`/`) and record a new immutable snapshot in version history.
           </p>
         </div>
@@ -136,7 +136,7 @@ export function PublishModal({
             type="button"
             onClick={onClose}
             disabled={isPublishing}
-            className="px-4 py-2 border-2 border-[#1A1A1A] bg-white hover:bg-gray-100 text-xs font-bold font-mono uppercase cursor-pointer"
+            className="px-4 py-2 border-2 border-[#1A1A1A] bg-white hover:bg-gray-100 text-sm font-bold font-mono uppercase cursor-pointer min-h-[40px]"
           >
             Cancel
           </button>
@@ -145,7 +145,7 @@ export function PublishModal({
             type="button"
             onClick={handlePublish}
             disabled={isPublishing || !result.isValid}
-            className="px-5 py-2 border-2 border-[#1A1A1A] bg-[#1B44B8] text-[#FAF7F2] hover:bg-[#133596] text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-[3px_3px_0px_#1A1A1A] cursor-pointer disabled:opacity-50"
+            className="px-5 py-2 border-2 border-[#1A1A1A] bg-[#1B44B8] text-[#FAF7F2] hover:bg-[#133596] text-sm font-bold uppercase tracking-wider flex items-center gap-2 shadow-[3px_3px_0px_#1A1A1A] cursor-pointer disabled:opacity-50 min-h-[40px]"
           >
             <Send className="w-4 h-4" />
             <span>{isPublishing ? 'Publishing...' : 'Confirm & Publish'}</span>

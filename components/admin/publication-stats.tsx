@@ -53,19 +53,19 @@ export function PublicationStats({ stats, departmentName }: PublicationStatsProp
             className="border border-[#E8E2D8] bg-white rounded-sm p-5 shadow-sm space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono uppercase tracking-widest text-[#77736C]">
+              <span className="text-xs font-mono uppercase tracking-wider text-[#55524D] font-medium">
                 {card.label}
               </span>
-              <div className={`w-7 h-7 rounded-sm flex items-center justify-center ${card.bg}`}>
-                <Icon className={`w-3.5 h-3.5 ${card.color}`} />
+              <div className={`w-8 h-8 rounded-sm flex items-center justify-center ${card.bg}`}>
+                <Icon className={`w-4 h-4 ${card.color}`} />
               </div>
             </div>
 
             <div>
-              <span className="font-serif text-3xl font-medium text-[#171717]">
+              <span className="font-serif text-3xl sm:text-4xl font-semibold text-[#171717]">
                 {card.value}
               </span>
-              <p className="text-[11px] text-[#77736C] font-light mt-0.5">
+              <p className="text-xs sm:text-[13px] text-[#55524D] mt-1">
                 {card.description}
               </p>
             </div>

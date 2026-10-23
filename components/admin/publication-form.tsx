@@ -19,6 +19,9 @@ import {
 } from '@/app/actions/magazines';
 import { slugify, formatDate } from '@/lib/utils';
 import { STORAGE_LIMITS } from '@/lib/config/upload-limits';
+import { PaymentModal } from './payment-modal';
+import { getMagazinePaymentDetailsAction } from '@/app/actions/payments';
+import { PAYMENT_CONFIG, formatPaiseToRupees } from '@/lib/payments/config';
 import {
   Building2,
   Save,
@@ -31,6 +34,8 @@ import {
   RefreshCw,
   FileCheck,
   FileText,
+  CreditCard,
+  IndianRupee,
 } from 'lucide-react';
 
 interface PublicationFormProps {
@@ -74,6 +79,17 @@ export function PublicationForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState<{
+    isPaid: boolean;
+    status: string;
+    amountPaise: number;
+    utrReference?: string;
+  }>({
+    isPaid: false,
+    status: 'PENDING',
+    amountPaise: PAYMENT_CONFIG.DEFAULT_SUBMISSION_FEE_PAISE,
+  });
 
   // Simulated preview object
   const previewMagazine: MagazineWithRelations = {
@@ -115,6 +131,34 @@ export function PublicationForm({
 
     return () => clearInterval(interval);
   }, [isEditing, initialData?.processing_status, router]);
+
+  // Load payment status when editing existing publication
+  React.useEffect(() => {
+    if (!initialData?.id) return;
+    let isMounted = true;
+    (async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await getMagazinePaymentDetailsAction(initialData.id, session?.access_token);
+        if (isMounted && res.success && res.data) {
+          const isPaid = res.data.obligation?.status === 'PAID';
+          setPaymentDetails({
+            isPaid,
+            status: res.data.obligation?.status || 'PENDING',
+            amountPaise: res.data.obligation?.amount_paise || res.data.currentFeePaise || PAYMENT_CONFIG.DEFAULT_SUBMISSION_FEE_PAISE,
+            utrReference: res.data.manualClaim?.utr_reference,
+          });
+        }
+      } catch (err) {
+        console.warn('[Payments] Note: Could not fetch initial payment details:', err);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [initialData?.id]);
 
   const handleRetryProcessing = async () => {
     if (!initialData?.id) return;
@@ -174,6 +218,19 @@ export function PublicationForm({
           return;
         }
       }
+
+      // FINANCIAL GATING: Verify payment obligation before initiating review submission
+      if (!paymentDetails.isPaid) {
+        if (!initialData?.id) {
+          setErrorMessage('Please save this new publication as a draft before completing the submission fee payment.');
+          setShowConfirmModal(false);
+          return;
+        }
+        setShowConfirmModal(false);
+        setShowPaymentModal(true);
+        return;
+      }
+
       setIsSubmittingReview(true);
     } else {
       setIsSavingDraft(true);
@@ -456,29 +513,29 @@ export function PublicationForm({
     <div className="space-y-10">
       {/* Messages */}
       {initialData?.status === 'REJECTED' && initialData.rejection_reason && (
-        <div className="p-4 rounded-sm bg-rose-50 border border-rose-300 text-rose-900 text-xs space-y-1.5 shadow-xs">
-          <div className="flex items-center gap-2 font-semibold text-rose-800 uppercase tracking-wider font-mono text-[11px]">
+        <div className="p-4 sm:p-5 rounded-sm bg-rose-50 border border-rose-300 text-rose-900 text-sm space-y-2 shadow-xs">
+          <div className="flex items-center gap-2 font-semibold text-rose-800 uppercase tracking-wider font-mono text-xs">
             <AlertCircle className="w-4 h-4 text-rose-600" />
             <span>Editorial Revision Required by College Super Admin</span>
           </div>
-          <p className="text-xs text-rose-800 leading-relaxed pl-6 whitespace-pre-wrap">
+          <p className="text-sm text-rose-900 leading-relaxed pl-6 whitespace-pre-wrap">
             {initialData.rejection_reason}
           </p>
-          <div className="pl-6 pt-1 text-[11px] text-rose-700">
+          <div className="pl-6 pt-1 text-xs sm:text-[13px] text-rose-700">
             Please make the requested updates below and click <strong>&ldquo;Submit for College Review&rdquo;</strong> to resubmit.
           </div>
         </div>
       )}
 
       {errorMessage && (
-        <div className="p-4 rounded-sm bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-3 animate-in fade-in">
+        <div className="p-4 rounded-sm bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-3 animate-in fade-in">
           <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
           <span className="font-medium">{errorMessage}</span>
         </div>
       )}
 
       {successMessage && (
-        <div className="p-4 rounded-sm bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-3 animate-in fade-in">
+        <div className="p-4 rounded-sm bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span className="font-medium">{successMessage}</span>
         </div>
@@ -493,27 +550,27 @@ export function PublicationForm({
               <span className="text-xs font-mono font-semibold uppercase tracking-widest text-[#B58A55]">
                 Section 1 • Editorial Scope
               </span>
-              <span className="text-[10px] font-mono text-[#77736C]">
+              <span className="text-xs font-mono text-[#55524D]">
                 Security Enforced
               </span>
             </div>
 
-            <div className="p-4 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-sm bg-white border border-[#E8E2D8] flex items-center justify-center text-[#171717]">
-                  <Building2 className="w-4 h-4" />
+            <div className="p-4 sm:p-5 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-sm bg-white border border-[#E8E2D8] flex items-center justify-center text-[#171717] shadow-xs">
+                  <Building2 className="w-5 h-5 text-[#B58A55]" />
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-[#77736C] block">
+                  <span className="text-xs uppercase font-mono tracking-wider text-[#55524D] block font-medium">
                     Authoring Academic Department
                   </span>
-                  <span className="text-sm font-semibold text-[#171717]">
+                  <span className="text-base font-semibold text-[#171717]">
                     {selectedDepartment?.name || 'Department Administrator'}
                   </span>
                 </div>
               </div>
 
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-900 border border-emerald-300">
+              <span className="text-xs font-mono px-2.5 py-1 rounded-sm bg-emerald-100 text-emerald-900 border border-emerald-300 font-medium">
                 Department Scoped
               </span>
             </div>
@@ -521,7 +578,7 @@ export function PublicationForm({
               <select
                 value={selectedDepartmentId}
                 onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-[#E8E2D8] rounded-sm text-xs text-[#171717] focus:outline-none focus:ring-1 focus:ring-[#171717]"
+                className="w-full h-11 px-3 bg-white border border-[#E8E2D8] rounded-sm text-sm text-[#171717] focus:outline-none focus:ring-1 focus:ring-[#171717]"
                 required
               >
                 <option value="">Select Academic Department</option>
@@ -536,12 +593,12 @@ export function PublicationForm({
               <span className="text-xs font-mono font-semibold uppercase tracking-widest text-[#B58A55]">
                 Section 2 • Publication Details
               </span>
-              <h2 className="font-serif text-xl font-medium text-[#171717] mt-0.5">
+              <h2 className="font-serif text-2xl font-medium text-[#171717] mt-0.5">
                 Archival Metadata
               </h2>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <Input
                 label="Publication Title *"
                 placeholder="e.g. TechNova: Frontiers of Distributed Systems"
@@ -551,7 +608,7 @@ export function PublicationForm({
               />
 
               {title && (
-                <p className="text-[11px] font-mono text-[#77736C]">
+                <p className="text-xs font-mono text-[#55524D]">
                   Generated URL Slug:{' '}
                   <span className="text-[#171717] font-semibold">
                     /magazine/{slugify(title)}
@@ -566,8 +623,8 @@ export function PublicationForm({
                 onChange={(e) => setSubtitle(e.target.value)}
               />
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-mono font-semibold uppercase tracking-wider text-[#44423E]">
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold uppercase tracking-wider text-[#2E2B26]">
                   Editorial Synopsis & Abstract
                 </label>
                 <textarea
@@ -575,7 +632,7 @@ export function PublicationForm({
                   placeholder="Provide an overview of the articles, research highlights, student projects, or editorial themes included in this edition..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-sm border border-[#E8E2D8] bg-white p-3 text-sm text-[#171717] placeholder:text-[#9A958E] focus:outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] transition-all"
+                  className="w-full rounded-sm border border-[#2C2824]/20 bg-white p-3.5 text-base text-[#171717] placeholder:text-[#55524D] focus:outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] transition-all"
                 />
               </div>
 
@@ -629,7 +686,7 @@ export function PublicationForm({
               <span className="text-xs font-mono font-semibold uppercase tracking-widest text-[#B58A55]">
                 Section 3 • Archival Media & Assets
               </span>
-              <h2 className="font-serif text-xl font-medium text-[#171717] mt-0.5">
+              <h2 className="font-serif text-2xl font-medium text-[#171717] mt-0.5">
                 Cover Artwork & PDF Document
               </h2>
             </div>
@@ -651,9 +708,9 @@ export function PublicationForm({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 rounded-sm bg-white border border-[#E8E2D8] shadow-sm">
             <Link
               href="/admin/magazines"
-              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-[#77736C] hover:text-[#171717] transition-colors"
+              className="inline-flex items-center gap-2 text-sm uppercase tracking-wider font-semibold text-[#55524D] hover:text-[#171717] transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-4 h-4" />
               <span>Cancel & Return</span>
             </Link>
 
@@ -665,7 +722,7 @@ export function PublicationForm({
                 onClick={() => handleFormSubmit(false)}
                 isLoading={isSavingDraft}
                 disabled={isSubmittingReview}
-                className="flex-1 sm:flex-initial gap-2"
+                className="flex-1 sm:flex-initial gap-2 text-sm font-medium min-h-[42px] px-4"
               >
                 <Save className="w-4 h-4 text-[#77736C]" />
                 <span>Save Draft</span>
@@ -675,10 +732,27 @@ export function PublicationForm({
                 type="button"
                 variant="primary"
                 size="md"
-                onClick={() => setShowConfirmModal(true)}
+                onClick={() => {
+                  setErrorMessage(null);
+                  if (!paymentDetails.isPaid) {
+                    if (!initialData?.id) {
+                      setErrorMessage('Please save this new publication as a draft before completing the submission fee payment.');
+                      return;
+                    }
+                    if (initialData.processing_status !== 'COMPLETED' && !pdfFile) {
+                      setErrorMessage('This publication must finish processing before it can be submitted for review.');
+                      return;
+                    }
+                    // Unpaid: Open payment modal directly
+                    setShowPaymentModal(true);
+                    return;
+                  }
+                  // Already paid: Proceed through editorial submission confirmation
+                  setShowConfirmModal(true);
+                }}
                 isLoading={isSubmittingReview}
                 disabled={isSavingDraft}
-                className="flex-1 sm:flex-initial gap-2 bg-[#171717] hover:bg-[#2C2C2A]"
+                className="flex-1 sm:flex-initial gap-2 bg-[#171717] hover:bg-[#2C2C2A] text-white text-sm font-medium min-h-[42px] px-5"
               >
                 <Send className="w-4 h-4 text-[#B58A55]" />
                 <span>Submit for Review</span>
@@ -704,21 +778,21 @@ export function PublicationForm({
                 </div>
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-[#F0EBE1] text-xs">
+              <div className="space-y-2 pt-2 border-t border-[#F0EBE1] text-sm">
                 <div className="flex justify-between">
-                  <span className="text-[#77736C]">Status:</span>
+                  <span className="text-[#55524D]">Status:</span>
                   <span className="font-mono font-medium text-[#171717]">
                     {initialData?.status || 'DRAFT'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#77736C]">Department:</span>
+                  <span className="text-[#55524D]">Department:</span>
                   <span className="font-mono font-medium text-[#171717]">
                     {department?.short_name || 'N/A'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#77736C]">Academic Year:</span>
+                  <span className="text-[#55524D]">Academic Year:</span>
                   <span className="font-mono font-medium text-[#171717]">
                     {academicYear}
                   </span>
@@ -731,7 +805,7 @@ export function PublicationForm({
               <div className="border border-[#E8E2D8] bg-white rounded-sm p-6 shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-[#F0EBE1] pb-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-[#B58A55]" />
+                    <FileText className="w-4 h-4 text-[#B58A55]" />
                     <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#171717]">
                       Document Pipeline
                     </span>
@@ -742,39 +816,39 @@ export function PublicationForm({
                   />
                 </div>
 
-                <div className="space-y-3 text-xs">
+                <div className="space-y-3 text-sm">
                   {initialData?.processing_status === 'COMPLETED' && (
-                    <div className="p-3 rounded-sm bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-800">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <div className="p-3.5 rounded-sm bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+                      <div className="flex items-center gap-2 font-semibold text-sm text-emerald-800">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                         <span>Your publication is ready for review</span>
                       </div>
-                      <p className="text-[11px] text-emerald-700">
+                      <p className="text-xs sm:text-[13px] text-emerald-700 leading-relaxed">
                         {initialData.page_count} pages extracted, optimized to WebP, and cached with thumbnails.
                       </p>
                     </div>
                   )}
 
                   {(initialData?.processing_status === 'PROCESSING' || initialData?.processing_status === 'QUEUED') && (
-                    <div className="p-3 rounded-sm bg-blue-50 border border-blue-200 text-blue-900 space-y-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-blue-800">
-                        <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                    <div className="p-3.5 rounded-sm bg-blue-50 border border-blue-200 text-blue-900 space-y-1">
+                      <div className="flex items-center gap-2 font-semibold text-sm text-blue-800">
+                        <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
                         <span>Preparing your digital publication...</span>
                       </div>
-                      <p className="text-[11px] text-blue-700">
+                      <p className="text-xs sm:text-[13px] text-blue-700 leading-relaxed">
                         Extracting pages, generating crisp WebP assets, and building page navigation.
                       </p>
                     </div>
                   )}
 
                   {initialData?.processing_status === 'FAILED' && (
-                    <div className="p-3 rounded-sm bg-rose-50 border border-rose-200 text-rose-900 space-y-2">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-rose-800">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <div className="p-3.5 rounded-sm bg-rose-50 border border-rose-200 text-rose-900 space-y-2">
+                      <div className="flex items-center gap-2 font-semibold text-sm text-rose-800">
+                        <AlertCircle className="w-4 h-4 text-rose-600" />
                         <span>Processing failed</span>
                       </div>
                       {initialData.processing_error && (
-                        <p className="text-[11px] text-rose-700 font-mono">
+                        <p className="text-xs text-rose-800 font-mono">
                           {initialData.processing_error}
                         </p>
                       )}
@@ -784,31 +858,31 @@ export function PublicationForm({
                         size="sm"
                         onClick={handleRetryProcessing}
                         isLoading={isRetryingProcessing}
-                        className="w-full gap-1.5 border-rose-300 text-rose-800 hover:bg-rose-100 text-xs mt-1"
+                        className="w-full gap-2 border-rose-300 text-rose-800 hover:bg-rose-100 text-sm min-h-[38px] mt-1"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
+                        <RefreshCw className="w-4 h-4" />
                         <span>Retry Processing</span>
                       </Button>
                     </div>
                   )}
 
                   {(!initialData?.processing_status || initialData?.processing_status === 'NOT_STARTED') && (
-                    <p className="text-[11px] text-[#77736C]">
+                    <p className="text-xs sm:text-[13px] text-[#55524D] leading-relaxed">
                       Attach and save a PDF document to begin automated page extraction and optimization.
                     </p>
                   )}
 
-                  <div className="space-y-1.5 pt-2 border-t border-[#F0EBE1] text-[11px]">
+                  <div className="space-y-1.5 pt-2 border-t border-[#F0EBE1] text-xs sm:text-[13px]">
                     <div className="flex justify-between">
-                      <span className="text-[#77736C]">Pages:</span>
+                      <span className="text-[#55524D]">Pages:</span>
                       <span className="font-mono font-medium text-[#171717]">
                         {initialData?.page_count ? `${initialData.page_count} pages` : 'Not processed'}
                       </span>
                     </div>
                     {initialData?.processed_at && (
                       <div className="flex justify-between">
-                        <span className="text-[#77736C]">Processed:</span>
-                        <span className="font-mono text-[#77736C]">
+                        <span className="text-[#55524D]">Processed:</span>
+                        <span className="font-mono text-[#55524D]">
                           {formatDate(initialData.processed_at)}
                         </span>
                       </div>
@@ -819,14 +893,66 @@ export function PublicationForm({
             )}
 
             {/* Publication Submission Rule Notice */}
-            <div className="p-4 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] space-y-2 text-[11px] text-[#77736C]">
-              <span className="font-semibold text-[#171717] block uppercase font-mono tracking-wide">
+            <div className="p-4 sm:p-5 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] space-y-2 text-xs sm:text-[13px] text-[#55524D]">
+              <span className="font-semibold text-[#171717] block uppercase font-mono tracking-wide text-xs">
                 Institutional Workflow
               </span>
               <p className="leading-relaxed">
                 Saving as <strong>Draft</strong> keeps the magazine editable in your department desk. Clicking <strong>Submit for Review</strong> submits the issue to the College Administration for formal publication approval.
               </p>
             </div>
+
+            {/* Financial Governance & Submission Fee Card */}
+            {isEditing && initialData && (
+              <div className="border border-[#E8E2D8] bg-white rounded-sm p-5 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between border-b border-[#F0EBE1] pb-2.5">
+                  <div className="flex items-center gap-2 font-mono text-xs uppercase font-semibold text-[#171717]">
+                    <CreditCard className="w-4 h-4 text-[#B58A55]" />
+                    <span>Submission Fee</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-[#171717]">
+                    {formatPaiseToRupees(paymentDetails.amountPaise)}
+                  </span>
+                </div>
+
+                {paymentDetails.isPaid ? (
+                  <div className="p-3 rounded-sm bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium">Fee Confirmed (Paid)</span>
+                  </div>
+                ) : paymentDetails.status === 'MANUAL_VERIFICATION_PENDING' ? (
+                  <div className="p-3 rounded-sm bg-amber-50 border border-amber-200 text-sm text-amber-900 space-y-1.5">
+                    <div className="flex items-center gap-2 font-medium">
+                      <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
+                      <span>Manual UPI Verification Pending</span>
+                    </div>
+                    {paymentDetails.utrReference && (
+                      <p className="text-xs font-mono text-amber-800">
+                        UTR: {paymentDetails.utrReference}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <div className="p-3 rounded-sm bg-[#F8F6F1] border border-[#E8E2D8] text-xs sm:text-[13px] text-[#55524D]">
+                      Payment is required prior to editorial review submission.
+                    </div>
+                    {initialData.processing_status === 'COMPLETED' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPaymentModal(true)}
+                        className="w-full text-sm font-medium gap-2 border-amber-400/60 bg-amber-50/50 hover:bg-amber-100 text-amber-900 min-h-[40px]"
+                      >
+                        <CreditCard className="w-4 h-4 text-amber-700" />
+                        <span>Pay {formatPaiseToRupees(paymentDetails.amountPaise)} Submission Fee</span>
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -839,6 +965,29 @@ export function PublicationForm({
         onCancel={() => setShowConfirmModal(false)}
         isSubmitting={isSubmittingReview}
       />
+
+      {/* Payment Gateway & Manual UPI Modal */}
+      {initialData && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          magazineId={initialData.id}
+          magazineTitle={title || initialData.title}
+          departmentName={selectedDepartment?.name || department?.name}
+          feePaise={paymentDetails.amountPaise}
+          initialStatus={paymentDetails.status}
+          existingUtr={paymentDetails.utrReference}
+          onPaymentSuccess={() => {
+            setPaymentDetails((prev) => ({
+              ...prev,
+              isPaid: true,
+              status: 'PAID',
+            }));
+            setShowPaymentModal(false);
+            setShowConfirmModal(true);
+          }}
+        />
+      )}
     </div>
   );
 }

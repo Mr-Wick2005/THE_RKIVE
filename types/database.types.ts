@@ -24,6 +24,20 @@ export type MagazineProcessingStatus =
   | 'COMPLETED'
   | 'FAILED';
 
+export type PaymentStatus =
+  | 'PENDING'
+  | 'PAID'
+  | 'FAILED'
+  | 'MANUAL_VERIFICATION_PENDING'
+  | 'REFUNDED'
+  | 'EXEMPT';
+
+export type PaymentMethodType =
+  | 'RAZORPAY'
+  | 'RAZORPAY_QR'
+  | 'MANUAL_UPI'
+  | 'INSTITUTIONAL_EXEMPTION';
+
 export interface Database {
   public: {
     Tables: {
@@ -344,6 +358,291 @@ export interface Database {
           }
         ];
       };
+      platform_settings: {
+        Row: {
+          key: string;
+          value_paise: number;
+          currency: string;
+          is_active: boolean;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          value_paise: number;
+          currency?: string;
+          is_active?: boolean;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          value_paise?: number;
+          currency?: string;
+          is_active?: boolean;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      platform_fee_audit_logs: {
+        Row: {
+          id: string;
+          previous_fee_paise: number;
+          new_fee_paise: number;
+          changed_by: string | null;
+          change_reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          previous_fee_paise: number;
+          new_fee_paise: number;
+          changed_by?: string | null;
+          change_reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          previous_fee_paise?: number;
+          new_fee_paise?: number;
+          changed_by?: string | null;
+          change_reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      magazine_payments: {
+        Row: {
+          id: string;
+          magazine_id: string;
+          department_id: string;
+          amount_paise: number;
+          currency: string;
+          status: PaymentStatus;
+          payment_method: PaymentMethodType;
+          fee_snapshot_paise: number;
+          paid_at: string | null;
+          verified_by: string | null;
+          verified_at: string | null;
+          rejection_reason: string | null;
+          created_by: string;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          magazine_id: string;
+          department_id: string;
+          amount_paise: number;
+          currency?: string;
+          status?: PaymentStatus;
+          payment_method?: PaymentMethodType;
+          fee_snapshot_paise: number;
+          paid_at?: string | null;
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejection_reason?: string | null;
+          created_by: string;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          magazine_id?: string;
+          department_id?: string;
+          amount_paise?: number;
+          currency?: string;
+          status?: PaymentStatus;
+          payment_method?: PaymentMethodType;
+          fee_snapshot_paise?: number;
+          paid_at?: string | null;
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejection_reason?: string | null;
+          created_by?: string;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_attempts: {
+        Row: {
+          id: string;
+          obligation_id: string;
+          magazine_id: string;
+          provider: string;
+          provider_order_id: string;
+          provider_payment_id: string | null;
+          provider_signature: string | null;
+          amount_paise: number;
+          currency: string;
+          status: string;
+          error_code: string | null;
+          error_description: string | null;
+          idempotency_key: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          obligation_id: string;
+          magazine_id: string;
+          provider?: string;
+          provider_order_id: string;
+          provider_payment_id?: string | null;
+          provider_signature?: string | null;
+          amount_paise: number;
+          currency?: string;
+          status?: string;
+          error_code?: string | null;
+          error_description?: string | null;
+          idempotency_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          obligation_id?: string;
+          magazine_id?: string;
+          provider?: string;
+          provider_order_id?: string;
+          provider_payment_id?: string | null;
+          provider_signature?: string | null;
+          amount_paise?: number;
+          currency?: string;
+          status?: string;
+          error_code?: string | null;
+          error_description?: string | null;
+          idempotency_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      manual_upi_claims: {
+        Row: {
+          id: string;
+          obligation_id: string;
+          magazine_id: string;
+          department_id: string;
+          utr_reference: string;
+          amount_paise: number;
+          submitted_by: string;
+          status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+          verified_by: string | null;
+          verified_at: string | null;
+          rejection_reason: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          obligation_id: string;
+          magazine_id: string;
+          department_id: string;
+          utr_reference: string;
+          amount_paise: number;
+          submitted_by: string;
+          status?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejection_reason?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          obligation_id?: string;
+          magazine_id?: string;
+          department_id?: string;
+          utr_reference?: string;
+          amount_paise?: number;
+          submitted_by?: string;
+          status?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejection_reason?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_webhook_events: {
+        Row: {
+          id: string;
+          event_id: string;
+          event_type: string;
+          provider_order_id: string | null;
+          provider_payment_id: string | null;
+          payload_summary: Json;
+          status: string;
+          processed_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          event_type: string;
+          provider_order_id?: string | null;
+          provider_payment_id?: string | null;
+          payload_summary?: Json;
+          status?: string;
+          processed_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          event_type?: string;
+          provider_order_id?: string | null;
+          provider_payment_id?: string | null;
+          payload_summary?: Json;
+          status?: string;
+          processed_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_audit_logs: {
+        Row: {
+          id: string;
+          event_type: string;
+          magazine_id: string | null;
+          obligation_id: string | null;
+          actor_id: string | null;
+          actor_role: string | null;
+          details: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          magazine_id?: string | null;
+          obligation_id?: string | null;
+          actor_id?: string | null;
+          actor_role?: string | null;
+          details?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_type?: string;
+          magazine_id?: string | null;
+          obligation_id?: string | null;
+          actor_id?: string | null;
+          actor_role?: string | null;
+          details?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {
@@ -364,6 +663,8 @@ export interface Database {
       user_role: UserRole;
       magazine_status: MagazineStatus;
       magazine_processing_status: MagazineProcessingStatus;
+      payment_status: PaymentStatus;
+      payment_method_type: PaymentMethodType;
     };
     CompositeTypes: {};
   };
